@@ -28,7 +28,5 @@ def get_artists_from_gcs(bucket_name, blob_name):
             f"Error getting artists from gcs bucket {bucket_name} with blob name {blob_name}: {e}"
         )
 
-# if __name__ == "__main__":
-#     json_data = get_genres()
-#     formatted_data = json.dumps(json_data, indent=3)
-#     print(formatted_data)
+if __name__ == "__main__":
+    pass
