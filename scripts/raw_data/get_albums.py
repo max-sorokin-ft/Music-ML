@@ -7,6 +7,8 @@ import time
 from tqdm import tqdm
 import argparse
 
+from scripts.utils.gcs_utils import get_artists_from_gcs
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
 )
@@ -17,24 +19,6 @@ logger = logging.getLogger(__name__)
     It loops through the artists from a given kworb page and gets the albums for each artist from the spotify api.
     The json data is uploaded to a gcs bucket.
 """
-
-
-def get_artists_from_gcs(bucket_name, blob_name):
-    """Gets the artists from the gcs bucket"""
-    try:
-        client = storage.Client.from_service_account_json("gcp_creds.json")
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
-        artists = json.loads(blob.download_as_string())
-        return artists
-    except Exception as e:
-        logger.error(
-            f"Error getting artists from gcs bucket {bucket_name} with blob name {blob_name}: {e}"
-        )
-        raise Exception(
-            f"Error getting artists from gcs bucket {bucket_name} with blob name {blob_name}: {e}"
-        )
-
 
 def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
     """Gets the albums from the spotify api for a given artist"""

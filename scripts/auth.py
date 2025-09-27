@@ -1,6 +1,6 @@
-import os
 import requests
 import base64
+import os
 
 def get_spotify_access_token():
     spotify_client_id = os.getenv("SPOTIFY_CLIENT_ID")
@@ -24,8 +24,3 @@ def get_spotify_access_token():
     json_result = requests.post(auth_url, headers=headers, data=data).json()
 
     return json_result["access_token"]
-
-def get_lastfm_api_key():
-    lastfm_api_key = os.getenv("LASTFM_API_KEY")
-    return lastfm_api_key
-

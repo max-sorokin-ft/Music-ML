@@ -1,16 +1,9 @@
-import requests
-from auth import get_lastfm_api_key
-import json
 from google.cloud import storage
+import json
 import logging
-import argparse
-from tqdm import tqdm
-import re
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
-)
 logger = logging.getLogger(__name__)
+
 
 def get_artists_from_gcs(bucket_name, blob_name):
     """Gets the artists from the gcs bucket"""
@@ -27,6 +20,3 @@ def get_artists_from_gcs(bucket_name, blob_name):
         raise Exception(
             f"Error getting artists from gcs bucket {bucket_name} with blob name {blob_name}: {e}"
         )
-
-if __name__ == "__main__":
-    pass

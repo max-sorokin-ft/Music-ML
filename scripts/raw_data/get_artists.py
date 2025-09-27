@@ -8,7 +8,6 @@ import time
 import logging
 from google.cloud import storage
 import argparse
-import os
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
