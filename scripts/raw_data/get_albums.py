@@ -1,5 +1,4 @@
 from google.cloud import storage
-from auth import get_spotify_access_token
 import requests
 import json
 import logging
@@ -7,6 +6,7 @@ import time
 from tqdm import tqdm
 import argparse
 
+from scripts.auth import get_spotify_access_token
 from scripts.utils.gcs_utils import get_artists_from_gcs
 
 logging.basicConfig(
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
     It loops through the artists from a given kworb page and gets the albums for each artist from the spotify api.
     The json data is uploaded to a gcs bucket.
 """
+
 
 def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
     """Gets the albums from the spotify api for a given artist"""
@@ -33,14 +34,16 @@ def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=
         success = False
         for attempt in range(max_retries):
             try:
-                response = requests.get(page_url, headers=headers, params=page_params, timeout=10)
+                response = requests.get(
+                    page_url, headers=headers, params=page_params, timeout=10
+                )
 
                 response.raise_for_status()
                 data = response.json()
                 success = True
                 break
             except Exception as e:
-                backoff_time = sleep_time * (2 ** attempt)
+                backoff_time = sleep_time * (2**attempt)
                 logger.warning(
                     f"Error getting artist's albums page from Spotify: {e}. Retrying in {backoff_time} seconds (attempt {attempt+1}/{max_retries})."
                 )
@@ -81,6 +84,7 @@ def process_albums_from_spotify(artist, token):
         logger.error(f"Error processing albums from spotify: {e}")
         raise Exception(f"Error processing albums from spotify: {e}")
 
+
 def write_albums_to_gcs(artists, bucket_name, base_blob_name):
     """Writes the albums to the gcs bucket"""
     try:
@@ -109,6 +113,7 @@ def write_albums_to_gcs(artists, bucket_name, base_blob_name):
             f"Error writing albums to gcs bucket {bucket_name} with base blob name {base_blob_name}: {e}"
         )
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -129,7 +134,7 @@ if __name__ == "__main__":
         "music-ml-data",
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
-    
+
     write_albums_to_gcs(
         artists,
         "music-ml-data",

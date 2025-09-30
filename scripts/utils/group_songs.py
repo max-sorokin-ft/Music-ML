@@ -1,26 +1,19 @@
-from locale import normalize
-from ssl import ALERT_DESCRIPTION_USER_CANCELLED
 from google.cloud import storage
-import requests
 import json
 import logging
-import time
 from tqdm import tqdm
 import argparse
 import re
-import csv
 
-from scripts.utils.gcs_utils import get_artists_from_gcs
-from scripts.raw_data.get_songs import get_all_artist_songs_from_gcs
+from scripts.utils.gcs_utils import get_artists_from_gcs, get_artist_songs_from_gcs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-import re
-
-KEEP_KEYWORDS = [
+# Versions that are truly different recordings/performances
+DISTINCT_VERSIONS = [
     "live",
     "acoustic",
     "remix",
@@ -28,20 +21,26 @@ KEEP_KEYWORDS = [
     "edit",
     "instrumental",
     "karaoke",
-    "version",
+    "demo",
     "outtake",
     "reprise",
+    "cover",
+    "unplugged",
+    "orchestral",
+    "a cappella",
+    "stripped",
 ]
 
-SAFE_REMOVE = [
+# Versions that are the same recording, just repackaged
+SAME_RECORDING = [
     "remaster",
     "deluxe",
     "explicit",
     "clean",
-    "radio edit",
     "album version",
     "single version",
-    "extended mix",
+    "original version",
+    "standard version",
     "film version",
 ]
 
@@ -60,7 +59,7 @@ def normalize_song_name(title: str) -> str:
 
         if " - " in original_title:
             before, after = original_title.split(" - ", 1)
-            if not any(kw in after.lower() for kw in KEEP_KEYWORDS):
+            if not any(kw in after.lower() for kw in DISTINCT_VERSIONS):
                 title = before
             else:
                 title = original_title
@@ -68,8 +67,8 @@ def normalize_song_name(title: str) -> str:
             title = original_title
 
         patterns = [
-            r"\s*\((.*?)?(" + "|".join(SAFE_REMOVE) + r").*?\)",
-            r"\s*\[(.*?)?(" + "|".join(SAFE_REMOVE) + r").*?\]",
+            r"\s*\((.*?)?(" + "|".join(SAME_RECORDING) + r").*?\)",
+            r"\s*\[(.*?)?(" + "|".join(SAME_RECORDING) + r").*?\]",
             r"\s*\(feat\.?.*?\)",
             r"\s*\[feat\.?.*?\]",
             r"\s*-\s*feat\.?.*$",
@@ -86,18 +85,24 @@ def normalize_song_name(title: str) -> str:
         raise Exception(f"Error normalizing song name: {e}")
 
 
-def group_songs(artist, bucket_name, threshold=1700):
+def group_songs(artist, bucket_name, songs=None, threshold=1700):
     try:
-        songs = get_all_artist_songs_from_gcs(artist, bucket_name)
+        if songs is None:
+            songs = get_artist_songs_from_gcs(artist, bucket_name)
+        
         grouped_songs = {}
+        variant_counter = {}
+        
         for song in songs:
             normalized_name = normalize_song_name(song["name"])
+            
             if normalized_name not in grouped_songs:
                 grouped_songs[normalized_name] = {"variants": []}
+                variant_counter[normalized_name] = 1
                 grouped_songs[normalized_name]["variants"].append(
                     {
                         "artist": song["primary_artist"],
-                        "id": song["spotify_song_id"],
+                        "spotify_song_id": song["spotify_song_id"],
                         "name": song["name"],
                         "duration_ms": song["duration_ms"],
                         "album": song["album"],
@@ -113,23 +118,20 @@ def group_songs(artist, bucket_name, threshold=1700):
                     grouped_songs[normalized_name]["variants"].append(
                         {
                             "artist": song["primary_artist"],
-                            "id": song["spotify_song_id"],
+                            "spotify_song_id": song["spotify_song_id"],
                             "name": song["name"],
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
                         }
                     )
-                elif (
-                    abs(
-                        song["duration_ms"]
-                        - grouped_songs[normalized_name]["variants"][0]["duration_ms"]
-                    )
-                ) > threshold:
-                    grouped_songs[normalized_name] = {"variants": []}
-                    grouped_songs[normalized_name]["variants"].append(
+                else:
+                    variant_counter[normalized_name] += 1
+                    new_key = f"{normalized_name}_variant{variant_counter[normalized_name]}"
+                    grouped_songs[new_key] = {"variants": []}
+                    grouped_songs[new_key]["variants"].append(
                         {
                             "artist": song["primary_artist"],
-                            "id": song["spotify_song_id"],
+                            "spotify_song_id": song["spotify_song_id"],
                             "name": song["name"],
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],

@@ -1,6 +1,5 @@
 import requests
 from bs4 import BeautifulSoup
-from auth import get_spotify_access_token
 from tqdm import tqdm
 from datetime import datetime
 import json
@@ -8,6 +7,8 @@ import time
 import logging
 from google.cloud import storage
 import argparse
+
+from scripts.auth import get_spotify_access_token
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -30,10 +31,11 @@ def get_artists_kworb(page_number):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         # If page number is 1, then the url is the base url for kworb's page.
-        if page_number == 1:
-            url = BASE_URL.format(page_number="")
-        else:
-            url = BASE_URL.format(page_number=page_number)
+        url = (
+            BASE_URL.format(page_number="")
+            if page_number == 1
+            else BASE_URL.format(page_number=page_number)
+        )
 
         # return the html of the page
         response = requests.get(url, headers=headers, timeout=10)
@@ -114,7 +116,9 @@ def fetch_artists_batch_spotify(batch_artist_list, token, max_retries=3, sleep_t
             headers = {"Authorization": f"Bearer {token}"}
             url = "https://api.spotify.com/v1/artists"
 
-            spotify_artist_ids = [artist["spotify_artist_id"] for artist in batch_artist_list]
+            spotify_artist_ids = [
+                artist["spotify_artist_id"] for artist in batch_artist_list
+            ]
             spotify_artist_ids_str = ",".join(spotify_artist_ids)
             params = {"ids": spotify_artist_ids_str}
 
@@ -175,19 +179,23 @@ def process_spotify_response(artists, batch_size=50):
         raise Exception(f"Error processing spotify response: {e}")
 
 
-def write_artists_to_gcs(artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE):
+def write_artists_to_gcs(
+    artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE
+):
     """Writes the artist list to a json file in a gcp bucket"""
     client = storage.Client.from_service_account_json("gcp_creds.json")
     bucket = client.bucket(bucket_name)
     batch_number = 1
     for i in tqdm(range(0, len(artists), batch_size)):
         try:
-            batch_artists = artists[i : i + batch_size]
-            for artist in batch_artists:
-                artist["full_blob_name"] = f"{base_blob_name}/batch{batch_number}/{artist['spotify_artist_id']}"
+            artist_batch = artists[i : i + batch_size]
+            for artist in artist_batch:
+                artist["full_blob_name"] = (
+                    f"{base_blob_name}/batch{batch_number}/{artist['spotify_artist_id']}"
+                )
             blob = bucket.blob(f"{base_blob_name}/batch{batch_number}/artists.json")
             blob.upload_from_string(
-                json.dumps(batch_artists, indent=3, ensure_ascii=False),
+                json.dumps(artist_batch, indent=3, ensure_ascii=False),
                 content_type="application/json",
             )
             logger.info(

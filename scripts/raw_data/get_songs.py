@@ -6,7 +6,11 @@ import time
 from tqdm import tqdm
 import argparse
 
-from scripts.utils.gcs_utils import get_artists_from_gcs
+from scripts.utils.gcs_utils import (
+    get_artists_from_gcs,
+    get_albums_from_gcs,
+    get_artist_songs_from_gcs,
+)
 from scripts.auth import get_spotify_access_token
 
 logging.basicConfig(
@@ -19,39 +23,6 @@ logger = logging.getLogger(__name__)
     It loops through the artists from a given kworb page and gets the albums for each artist from the spotify api.
     The json data is uploaded to a gcs bucket.
 """
-
-def get_albums_from_gcs(artist, bucket_name):
-    """Gets the albums from the gcs bucket for a given artist"""
-    try:
-        client = storage.Client.from_service_account_json("gcp_creds.json")
-        bucket = client.bucket(bucket_name)
-        blob_name = f"{artist['full_blob_name']}/albums.json"
-        blob = bucket.blob(blob_name)
-        albums = json.loads(blob.download_as_string())
-        return albums
-    except Exception as e:
-        logger.error(
-            f"Error getting albums from gcs bucket {bucket_name} with blob name {blob_name}: {e}"
-        )
-        raise Exception(
-            f"Error getting albums from gcs bucket {bucket_name} with blob name {blob_name}: {e}"
-        )
-
-
-def get_all_artist_songs_from_gcs(artist, bucket_name):
-    """Gets all the songs combined from the gcs bucket for a given artist"""
-    try:
-        client = storage.Client.from_service_account_json("gcp_creds.json")
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
-        return json.loads(blob.download_as_string())
-    except Exception as e:
-        logger.error(
-            f"Error getting all artist songs from gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/songs.json: {e}"
-        )
-        raise Exception(
-            f"Error getting all artist songs from gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/songs.json: {e}"
-        )
 
 
 def fetch_album_songs_from_spotify(album_id, token, max_retries=3, sleep_time=1):
@@ -127,22 +98,20 @@ def process_artist_top_tracks_from_spotify(artist, token, top_n_tracks=10):
             artist["spotify_artist_id"], token
         )
         for track in top_tracks["tracks"][:top_n_tracks]:
-                individual_song = {}
-                individual_song["spotify_song_id"] = track["id"]
-                individual_song["spotify_album_id"] = track["album"]["id"]
-                individual_song["spotify_artist_id"] = artist["spotify_artist_id"]
-                individual_song["name"] = track["name"]
-                individual_song["album"] = track["album"]["name"]
-                individual_song["artists"] = [
-                    artist["name"] for artist in track["artists"]
-                ]
-                individual_song["primary_artist"] = track["artists"][0]["name"]
-                individual_song["spotify_url"] = track["external_urls"]["spotify"]
-                individual_song["release_date"] = track["album"]["release_date"]
-                individual_song["duration_ms"] = track["duration_ms"]
-                individual_song["explicit"] = track["explicit"]
-                individual_song["images"] = track["album"]["images"]
-                top_songs.append(individual_song)
+            individual_song = {}
+            individual_song["spotify_song_id"] = track["id"]
+            individual_song["spotify_album_id"] = track["album"]["id"]
+            individual_song["spotify_artist_id"] = artist["spotify_artist_id"]
+            individual_song["name"] = track["name"]
+            individual_song["album"] = track["album"]["name"]
+            individual_song["artists"] = [artist["name"] for artist in track["artists"]]
+            individual_song["primary_artist"] = track["artists"][0]["name"]
+            individual_song["spotify_url"] = track["external_urls"]["spotify"]
+            individual_song["release_date"] = track["album"]["release_date"]
+            individual_song["duration_ms"] = track["duration_ms"]
+            individual_song["explicit"] = track["explicit"]
+            individual_song["images"] = track["album"]["images"]
+            top_songs.append(individual_song)
         return top_songs
     except Exception as e:
         logger.error(f"Error processing artist top tracks from spotify: {e}")
@@ -155,13 +124,15 @@ def dedupe_single_songs(artist, token, bucket_name):
     try:
         deduped_songs = []
         top_songs = process_artist_top_tracks_from_spotify(artist, token)
-        all_album_songs = get_all_artist_songs_from_gcs(artist, bucket_name)
+        all_album_songs = get_artist_songs_from_gcs(artist, bucket_name)
         for song in top_songs:
             if song["spotify_song_id"] not in [
                 song["spotify_song_id"] for song in all_album_songs
             ]:
                 deduped_songs.append(song)
-        logger.info(f"Successfully deduped {len(deduped_songs)} single songs for artist {artist['artist']}")
+        logger.info(
+            f"Successfully deduped {len(deduped_songs)} single songs for artist {artist['artist']}"
+        )
         return deduped_songs
     except Exception as e:
         logger.error(f"Error deduping single songs: {e}")
