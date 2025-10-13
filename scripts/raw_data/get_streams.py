@@ -146,7 +146,7 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
         raise Exception(f"Error fetching tracks from Spotify: {e}")
 
 
-def process_backfilled_tracks(tracks, artist, kworb_songs):
+def process_backfilled_tracks(tracks, artist):
     """Processes backfilled tracks from Spotify API to songs.json format with streams"""
     try:
         processed_songs = []
@@ -200,7 +200,7 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
         bucket = client.bucket(bucket_name)
         token = get_spotify_access_token()
 
-        for artist in tqdm(artists[164:165]):
+        for artist in tqdm(artists[0:20]):
             try:
                 songs = get_artist_songs_from_gcs(artist, bucket_name)
                 kworb_songs = process_artist_songs_kworb(artist)
@@ -215,20 +215,20 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
                 if missing_ids:
                     fetched_tracks = fetch_tracks_from_spotify(missing_ids, token)
                     backfilled_songs = process_backfilled_tracks(
-                        fetched_tracks, artist, kworb_songs
+                        fetched_tracks, artist
                     )
                     songs.extend(backfilled_songs)
+
+                    logger.info(
+                        f"Added {len(backfilled_songs)} backfilled tracks for {artist['artist']}"
+                    )
 
                     grouped_songs = group_songs(artist, bucket_name, songs)
                     grouped_songs = match_streams_to_grouped_songs(
                         grouped_songs, kworb_songs
                     )
 
-                    logger.info(
-                        f"Added {len(backfilled_songs)} backfilled tracks for {artist['artist']}"
-                    )
-
-                songs = update_songs_from_grouped(songs, grouped_songs)
+                    songs = update_songs_from_grouped(songs, grouped_songs)
 
                 blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
                 blob.upload_from_string(

@@ -4,6 +4,8 @@ import logging
 from tqdm import tqdm
 import argparse
 import re
+import unicodedata
+import string
 
 from scripts.utils.gcs_utils import get_artists_from_gcs, get_artist_songs_from_gcs
 
@@ -13,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Versions that are truly different recordings/performances
-DISTINCT_VERSIONS = [
+DISTINCT_VERSIONS = {
     "live",
     "acoustic",
     "remix",
@@ -27,75 +29,111 @@ DISTINCT_VERSIONS = [
     "cover",
     "unplugged",
     "orchestral",
-    "a cappella",
+    "cappella",
+    "acapella",
     "stripped",
-]
+    "strings",
+    "session",
+    "rehearsal",
+    "bootleg",
+    "alternate",
+}
 
 # Versions that are the same recording, just repackaged
-SAME_RECORDING = [
+SAME_RECORDING = {
+    "remastered",
     "remaster",
+    "remastering",
     "deluxe",
     "explicit",
     "clean",
-    "album version",
-    "single version",
-    "original version",
-    "standard version",
-    "film version",
-]
+    "album",
+    "version",
+    "single",
+    "original",
+    "standard",
+    "film",
+    "edition",
+    "anniversary",
+    "expanded",
+    "extended",
+    "bonus",
+    "special",
+    "collectors",
+    "collector",
+    "limited",
+    "radio",
+    "digital",
+    "vinyl",
+    "cd",
+    "stereo",
+    "mono",
+}
 
 
 def normalize_song_name(title: str) -> str:
     """
     Normalize Spotify track names for grouping.
-    'Wonderwall - Remastered 2014' -> 'Wonderwall'
-    'Wonderwall - Deluxe' -> 'Wonderwall'
+    
+    Examples:
+        'Supersonic - Remastered' -> 'supersonic'
+        'Wonderwall (Live at Wembley)' -> 'wonderwall live'
+        'Champagne Supernova - Deluxe Edition' -> 'champagne supernova'
     """
-    try:
-        if not title:
-            return ""
+    if not title:
+        return ""
+    
+    original_title = title
+    
+    title = unicodedata.normalize("NFKD", title).casefold()
+    
+    feat_patterns = [
+        r'\s*[\(\[\{]\s*feat\.?[^\)\]\}]*[\)\]\}]',  # (feat. X)
+        r'\s*[\(\[\{]\s*ft\.?[^\)\]\}]*[\)\]\}]',     # (ft. X)
+        r'\s*[\(\[\{]\s*featuring[^\)\]\}]*[\)\]\}]', # (featuring X)
+        r'\s*-\s*feat\.?.*$',                          # - feat. X
+        r'\s*-\s*ft\.?.*$',                            # - ft. X
+        r'\s*-\s*featuring.*$',                        # - featuring X
+    ]
+    
+    for pattern in feat_patterns:
+        title = re.sub(pattern, '', title, flags=re.IGNORECASE)
 
-        original_title = title.strip()
-
-        if " - " in original_title:
-            before, after = original_title.split(" - ", 1)
-            if not any(kw in after.lower() for kw in DISTINCT_VERSIONS):
-                title = before
-            else:
-                title = original_title
-        else:
-            title = original_title
-
-        patterns = [
-            r"\s*\((.*?)?(" + "|".join(SAME_RECORDING) + r").*?\)",
-            r"\s*\[(.*?)?(" + "|".join(SAME_RECORDING) + r").*?\]",
-            r"\s*\(feat\.?.*?\)",
-            r"\s*\[feat\.?.*?\]",
-            r"\s*-\s*feat\.?.*$",
-        ]
-
-        for pattern in patterns:
-            title = re.sub(pattern, "", title, flags=re.IGNORECASE)
-
-        title = re.sub(r"\s+", " ", title).strip()
-
-        return title if title else original_title
-    except Exception as e:
-        logger.error(f"Error normalizing song name: {e}")
-        raise Exception(f"Error normalizing song name: {e}")
+    title = re.sub(r'\s*[\(\[\{]\s*\d{4}\s*[\)\]\}]', '', title)
+    
+    title = title.translate(str.maketrans('', '', string.punctuation))
+    
+    title = re.sub(r'\s+', ' ', title).strip()
+    
+    words = title.split()
+    
+    if not words:
+        return original_title.lower()
+    
+    filtered_words = []
+    for word in words:
+        if word in DISTINCT_VERSIONS:
+            filtered_words.append(word)
+        elif word not in SAME_RECORDING:
+            filtered_words.append(word)
+    
+    result = ' '.join(filtered_words).strip()
+    
+    return result if result else original_title.lower()
 
 
-def group_songs(artist, bucket_name, songs=None, threshold=1700):
-    try:
-        if songs is None:
-            songs = get_artist_songs_from_gcs(artist, bucket_name)
-        
+def group_songs(artist, bucket_name, songs=None, threshold=20000):
+    try: 
         grouped_songs = {}
         variant_counter = {}
         
+        # There are cases in the repo where songs can be passed in from memory/other functions, if not we get them from GCS
+        if songs is None:
+            songs = get_artist_songs_from_gcs(artist, bucket_name)
+
         for song in songs:
             normalized_name = normalize_song_name(song["name"])
-            
+
             if normalized_name not in grouped_songs:
                 grouped_songs[normalized_name] = {"variants": []}
                 variant_counter[normalized_name] = 1
@@ -109,13 +147,21 @@ def group_songs(artist, bucket_name, songs=None, threshold=1700):
                     }
                 )
             else:
-                if (
-                    abs(
-                        song["duration_ms"]
-                        - grouped_songs[normalized_name]["variants"][0]["duration_ms"]
+                matched_key = normalized_name
+                found_match = False
+                for i in range(1, variant_counter[normalized_name] + 1):
+                    matched_key = normalized_name if i == 1 else f"{normalized_name}_variant{i}"
+
+                    duration_diff = abs(
+                            song["duration_ms"]
+                            - grouped_songs[matched_key]["variants"][0]["duration_ms"]
                     )
-                ) < threshold:
-                    grouped_songs[normalized_name]["variants"].append(
+                    if duration_diff < threshold:
+                        found_match = True
+                        break
+                
+                if found_match:
+                    grouped_songs[matched_key]["variants"].append(
                         {
                             "artist": song["primary_artist"],
                             "spotify_song_id": song["spotify_song_id"],
@@ -137,6 +183,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=1700):
                             "album": song["album"],
                         }
                     )
+        
         return grouped_songs
     except Exception as e:
         logger.error(f"Error grouping song for artist {artist['artist']}: {e}")
@@ -147,12 +194,14 @@ def write_grouped_songs_to_gcs(artists, bucket_name, base_blob_name):
     try:
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
-        for artist in tqdm(artists):
+        
+        for artist in tqdm(artists[0:20]):
             grouped_songs = group_songs(artist, bucket_name)
             blob = bucket.blob(f"{artist['full_blob_name']}/grouped_songs.json")
             blob.upload_from_string(
                 json.dumps(grouped_songs, indent=3, ensure_ascii=False)
             )
+        
         logger.info(
             f"Successfully grouped songs for {len(artists)} artists to gcs bucket {bucket_name} with blob name {base_blob_name}"
         )

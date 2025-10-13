@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
     The json data is uploaded to a gcs bucket.
 """
 
+SKIT_WORDS = ["skit", "outro", "intro", "commentary", "interlude", "dialogue", "dialog", "monologue"]
+
 
 def fetch_album_songs_from_spotify(album_id, token, max_retries=3, sleep_time=1):
     """Gets the songs from the spotify api"""
@@ -64,12 +66,18 @@ def fetch_artist_top_tracks_from_spotify(artist_id, token, max_retries=3, sleep_
     raise Exception(f"Error getting artist top tracks from spotify: {e}")
 
 
-def process_album_songs_from_spotify(album, token):
+def process_album_songs_from_spotify(album, token, duration_threshold=50000):
     """Processes the songs from the spotify api for a given album"""
     try:
         songs_list = []
         songs = fetch_album_songs_from_spotify(album["spotify_album_id"], token)
         for song in songs["items"]:
+            if song["artists"][0]["name"] != album["artist"]:
+                continue
+            normalized_song_name = (song["name"]).lower()
+            if any(word in normalized_song_name for word in ["skit", "outro", "intro", "commentary", "interlude"]):
+                if song["duration_ms"] < duration_threshold:
+                    continue
             individual_song = {}
             individual_song["spotify_song_id"] = song["id"]
             individual_song["spotify_album_id"] = album["spotify_album_id"]
@@ -90,7 +98,7 @@ def process_album_songs_from_spotify(album, token):
         raise Exception(f"Error processing album songs from spotify: {e}")
 
 
-def process_artist_top_tracks_from_spotify(artist, token, top_n_tracks=10):
+def process_artist_top_tracks_from_spotify(artist, token, top_n_tracks=15):
     """Processes the top tracks from the spotify api for a given artist, only includes singles"""
     try:
         top_songs = []
@@ -98,6 +106,8 @@ def process_artist_top_tracks_from_spotify(artist, token, top_n_tracks=10):
             artist["spotify_artist_id"], token
         )
         for track in top_tracks["tracks"][:top_n_tracks]:
+            if track["artists"][0]["name"] != artist["artist"]:
+                continue
             individual_song = {}
             individual_song["spotify_song_id"] = track["id"]
             individual_song["spotify_album_id"] = track["album"]["id"]
@@ -145,7 +155,7 @@ def write_album_songs_to_gcs(artists, bucket_name, base_blob_name):
         token = get_spotify_access_token()
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
-        for artist in tqdm(artists):
+        for artist in tqdm(artists[0:20]):
             albums = get_albums_from_gcs(artist, bucket_name)
             all_album_songs = []
             for album in albums:
@@ -190,7 +200,7 @@ def write_single_songs_to_gcs(artists, bucket_name, base_blob_name):
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
 
-        for artist in tqdm(artists):
+        for artist in tqdm(artists[0:20]):
             single_songs = dedupe_single_songs(artist, token, bucket_name)
             for song in single_songs:
                 blob = bucket.blob(
