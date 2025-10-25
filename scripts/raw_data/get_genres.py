@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.chosic.com/music-genre-finder/"
 SPOTIFY_URL = "https://open.spotify.com/artist/{artist_id}"
-
+BUCKET_NAME = "music-ml-data"
 
 def get_artist_genres(artist_id):
     """Simple genre scraper using Playwright"""
@@ -63,13 +63,14 @@ def write_genres_to_gcs(artists, bucket_name, base_blob_name):
     """Writes the genres to the gcs bucket"""
     try:
         updated_artists = []
-        for artist in tqdm(artists[:30]):
+        for artist in tqdm(artists):
             genres = get_artist_genres(artist["spotify_artist_id"])
             artist["genres"] = genres
             logger.info(
                 f"Successfully got genres {genres} for artist {artist['artist']}"
             )
             updated_artists.append(artist)
+            time.sleep(0.5)
 
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
@@ -107,11 +108,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     artists = get_artists_from_gcs(
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
     write_genres_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
     )

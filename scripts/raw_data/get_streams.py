@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://kworb.net/spotify/artist/{spotify_artist_id}_songs.html"
-
+BUCKET_NAME = "music-ml-data"
 
 def get_artist_songs_kworb(artist):
     """Gets the html of the page from kworb's page"""
@@ -271,12 +271,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     artists = get_artists_from_gcs(
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
 
     write_streams_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
     )

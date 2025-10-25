@@ -14,6 +14,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+BUCKET_NAME = "music-ml-data"
+
 # Versions that are truly different recordings/performances
 DISTINCT_VERSIONS = {
     "live",
@@ -231,11 +233,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     artists = get_artists_from_gcs(
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
     write_grouped_songs_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
     )

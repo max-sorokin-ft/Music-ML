@@ -15,15 +15,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-"""
-    This script is part of the data acquisition pipeline for the project and it is used to get the artists and their metadata.
-    It first scrapes the kworb's page to get the artist's names, spotify id, and listeners.
-    Then it uses the spotify id to get the artist's metadata from the spotify api.
-    The json data is uploaded to a gcs bucket.
-"""
-
 GCS_BATCH_SIZE = 250
 BASE_URL = "https://kworb.net/spotify/listeners{page_number}.html"
+BUCKET_NAME = "music-ml-data"
 
 
 def get_artists_kworb(page_number):
@@ -86,11 +80,7 @@ def process_kworb_html(page_number):
                         individual_artist["spotify_artist_id"] = spotify_artist_id
                     if td.text.strip():
                         if artist_column_map[i] == "Listeners":
-                            individual_artist["metrics"] = {}
-                            individual_artist["metrics"]["kworb"] = {}
-                            individual_artist["metrics"]["kworb"][
-                                "monthly_listeners"
-                            ] = int(td.text.strip().replace(",", ""))
+                            individual_artist["monthly_listeners"] = int(td.text.strip().replace(",", ""))
                         elif artist_column_map[i] == "Artist":
                             individual_artist["artist"] = td.text.strip()
                         individual_artist["full_blob_name"] = None
@@ -162,16 +152,14 @@ def process_spotify_response(artists, batch_size=50):
                         "%Y-%m-%d %H:%M:%S"
                     )
 
-                artist["metrics"]["spotify"] = {}
-                artist["metrics"]["spotify"]["followers"] = int(
+                artist["followers"] = int(
                     response["artists"][index]["followers"]["total"]
                 )
-                artist["metrics"]["spotify"]["popularity"] = int(
+                artist["popularity"] = int(
                     response["artists"][index]["popularity"]
                 )
-                artist["spotify_meta"] = {}
-                artist["spotify_meta"]["genres"] = response["artists"][index]["genres"]
-                artist["spotify_meta"]["images"] = response["artists"][index]["images"]
+                artist["genres"] = response["artists"][index]["genres"]
+                artist["images"] = response["artists"][index]["images"]
             time.sleep(1)
         return artists
     except Exception as e:
@@ -224,6 +212,6 @@ if __name__ == "__main__":
     artists = process_spotify_response(artists)
     write_artists_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}",
     )

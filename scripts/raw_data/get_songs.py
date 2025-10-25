@@ -18,12 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-"""
-    This script is part of the data acquisition pipeline for the project and it is used to get the albums for a given artist from the spotify api.
-    It loops through the artists from a given kworb page and gets the albums for each artist from the spotify api.
-    The json data is uploaded to a gcs bucket.
-"""
-
+BUCKET_NAME = "music-ml-data"
 SKIT_WORDS = ["skit", "outro", "intro", "commentary", "interlude", "dialogue", "dialog", "monologue"]
 
 
@@ -155,7 +150,7 @@ def write_album_songs_to_gcs(artists, bucket_name, base_blob_name):
         token = get_spotify_access_token()
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
-        for artist in tqdm(artists[0:20]):
+        for artist in tqdm(artists):
             albums = get_albums_from_gcs(artist, bucket_name)
             all_album_songs = []
             for album in albums:
@@ -200,7 +195,7 @@ def write_single_songs_to_gcs(artists, bucket_name, base_blob_name):
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
 
-        for artist in tqdm(artists[0:20]):
+        for artist in tqdm(artists):
             single_songs = dedupe_single_songs(artist, token, bucket_name)
             for song in single_songs:
                 blob = bucket.blob(
@@ -252,17 +247,17 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     artists = get_artists_from_gcs(
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
 
     write_album_songs_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
     )
     write_single_songs_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
     )

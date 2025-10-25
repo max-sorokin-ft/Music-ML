@@ -14,11 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-"""
-    This script is part of the data acquisition pipeline for the project and it is used to get the albums for a given artist from the spotify api.
-    It loops through the artists from a given kworb page and gets the albums for each artist from the spotify api.
-    The json data is uploaded to a gcs bucket.
-"""
+BUCKET_NAME = "music-ml-data"
 
 
 def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
@@ -76,7 +72,6 @@ def process_albums_from_spotify(artist, token):
             individual_album["type"] = album["album_type"]
             individual_album["release_date"] = album["release_date"]
             individual_album["total_tracks"] = album["total_tracks"]
-            individual_album["is_processed"] = False
             individual_album["images"] = album["images"]
             album_list.append(individual_album)
         return album_list
@@ -131,12 +126,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     artists = get_artists_from_gcs(
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
 
     write_albums_to_gcs(
         artists,
-        "music-ml-data",
+        BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
     )
