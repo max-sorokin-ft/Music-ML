@@ -108,7 +108,7 @@ def add_popularity_from_streams(df):
     df["popularity"] = df["popularity"].round().astype("Int64")
 
     return df
-    
+
 
 
 
@@ -139,7 +139,7 @@ if __name__ == "__main__":
         BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
-    # create_artists_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
-    # create_albums_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
+    create_artists_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
+    create_albums_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
     read_parquet()
 
