@@ -67,8 +67,6 @@ def process_kworb_html(page_number):
                 "spotify_artist_id": None,
                 "artist": None,
                 "spotify_url": None,
-                "init_processed_at": None,
-                "last_processed_at": None,
                 "full_blob_name": None,
             }
             for i, td in enumerate(tr.find_all("td")):
@@ -140,26 +138,13 @@ def process_spotify_response(artists, batch_size=50):
                 artist["spotify_url"] = response["artists"][index]["external_urls"][
                     "spotify"
                 ]
-                if artist["init_processed_at"] is None:
-                    artist["init_processed_at"] = datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                    artist["last_processed_at"] = datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-                else:
-                    artist["last_processed_at"] = datetime.now().strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-
                 artist["followers"] = int(
                     response["artists"][index]["followers"]["total"]
                 )
                 artist["popularity"] = int(
                     response["artists"][index]["popularity"]
                 )
-                artist["genres"] = response["artists"][index]["genres"]
-                artist["images"] = response["artists"][index]["images"]
+                artist["images"] = [image["url"] for image in response["artists"][index]["images"]]
             time.sleep(1)
         return artists
     except Exception as e:

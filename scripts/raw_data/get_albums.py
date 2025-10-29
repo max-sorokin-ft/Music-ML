@@ -72,7 +72,7 @@ def process_albums_from_spotify(artist, token):
             individual_album["type"] = album["album_type"]
             individual_album["release_date"] = album["release_date"]
             individual_album["total_tracks"] = album["total_tracks"]
-            individual_album["images"] = album["images"]
+            individual_album["images"] = [image["url"] for image in album["images"]]
             album_list.append(individual_album)
         return album_list
     except Exception as e:
