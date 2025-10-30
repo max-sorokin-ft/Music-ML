@@ -156,12 +156,14 @@ def process_backfilled_tracks(tracks, artist):
             individual_song["spotify_song_id"] = track["id"]
             individual_song["spotify_album_id"] = track["album"]["id"]
             individual_song["spotify_artist_id"] = artist["spotify_artist_id"]
-            individual_song["name"] = track["name"]
+            individual_song["song"] = track["name"]
             individual_song["album"] = track["album"]["name"]
             individual_song["artists"] = [
                 artist_data["name"] for artist_data in track["artists"]
             ]
-            individual_song["primary_artist"] = track["artists"][0]["name"]
+            individual_song["artist_ids"] = [
+                artist_data["id"] for artist_data in track["artists"]
+            ]
             individual_song["spotify_url"] = track["external_urls"]["spotify"]
             individual_song["release_date"] = track["album"]["release_date"]
             individual_song["duration_ms"] = track["duration_ms"]

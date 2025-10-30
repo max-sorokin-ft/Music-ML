@@ -80,7 +80,7 @@ def process_album_songs_from_spotify(album, token, duration_threshold=50000):
             individual_song["song"] = song["name"]
             individual_song["album"] = album["album"]
             individual_song["artists"] = [artist["name"] for artist in song["artists"]]
-            individual_song["artists"] = [artist["id"] for artist in song["artists"]]
+            individual_song["artist_ids"] = [artist["id"] for artist in song["artists"]]
             individual_song["spotify_url"] = song["external_urls"]["spotify"]
             individual_song["release_date"] = album["release_date"]
             individual_song["duration_ms"] = song["duration_ms"]
@@ -107,10 +107,10 @@ def process_artist_top_tracks_from_spotify(artist, token, top_n_tracks=15):
             individual_song["spotify_song_id"] = track["id"]
             individual_song["spotify_album_id"] = track["album"]["id"]
             individual_song["spotify_artist_id"] = artist["spotify_artist_id"]
-            individual_song["name"] = track["name"]
+            individual_song["song"] = track["name"]
             individual_song["album"] = track["album"]["name"]
             individual_song["artists"] = [artist["name"] for artist in track["artists"]]
-            individual_song["primary_artist"] = track["artists"][0]["name"]
+            individual_song["artist_ids"] = [artist["id"] for artist in track["artists"]]
             individual_song["spotify_url"] = track["external_urls"]["spotify"]
             individual_song["release_date"] = track["album"]["release_date"]
             individual_song["duration_ms"] = track["duration_ms"]
@@ -251,11 +251,11 @@ if __name__ == "__main__":
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
 
-    write_album_songs_to_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
+    # write_album_songs_to_gcs(
+    #     artists,
+    #     BUCKET_NAME,
+    #     f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+    # )
     write_single_songs_to_gcs(
         artists,
         BUCKET_NAME,

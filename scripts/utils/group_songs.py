@@ -134,16 +134,17 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
             songs = get_artist_songs_from_gcs(artist, bucket_name)
 
         for song in songs:
-            normalized_name = normalize_song_name(song["name"])
+            normalized_name = normalize_song_name(song["song"])
 
             if normalized_name not in grouped_songs:
                 grouped_songs[normalized_name] = {"variants": []}
                 variant_counter[normalized_name] = 1
                 grouped_songs[normalized_name]["variants"].append(
                     {
-                        "artist": song["primary_artist"],
+                        "artists": song["artists"],
+                        "artist_ids": song["artist_ids"],
                         "spotify_song_id": song["spotify_song_id"],
-                        "name": song["name"],
+                        "song": song["song"],
                         "duration_ms": song["duration_ms"],
                         "album": song["album"],
                     }
@@ -165,9 +166,10 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                 if found_match:
                     grouped_songs[matched_key]["variants"].append(
                         {
-                            "artist": song["primary_artist"],
+                            "artists": song["artists"],
+                            "artist_ids": song["artist_ids"],
                             "spotify_song_id": song["spotify_song_id"],
-                            "name": song["name"],
+                            "song": song["song"],
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
                         }
@@ -178,9 +180,10 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                     grouped_songs[new_key] = {"variants": []}
                     grouped_songs[new_key]["variants"].append(
                         {
-                            "artist": song["primary_artist"],
+                            "artists": song["artists"],
+                            "artist_ids": song["artist_ids"],
                             "spotify_song_id": song["spotify_song_id"],
-                            "name": song["name"],
+                            "song": song["song"],
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
                         }
