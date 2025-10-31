@@ -251,11 +251,11 @@ if __name__ == "__main__":
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
 
-    # write_album_songs_to_gcs(
-    #     artists,
-    #     BUCKET_NAME,
-    #     f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    # )
+    write_album_songs_to_gcs(
+        artists,
+        BUCKET_NAME,
+        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+    )
     write_single_songs_to_gcs(
         artists,
         BUCKET_NAME,

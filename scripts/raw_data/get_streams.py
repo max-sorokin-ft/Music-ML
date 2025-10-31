@@ -202,7 +202,7 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
         bucket = client.bucket(bucket_name)
         token = get_spotify_access_token()
 
-        for artist in tqdm(artists[0:20]):
+        for artist in tqdm(artists):
             try:
                 songs = get_artist_songs_from_gcs(artist, bucket_name)
                 kworb_songs = process_artist_songs_kworb(artist)

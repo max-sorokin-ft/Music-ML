@@ -200,7 +200,7 @@ def write_grouped_songs_to_gcs(artists, bucket_name, base_blob_name):
         client = storage.Client.from_service_account_json("gcp_creds.json")
         bucket = client.bucket(bucket_name)
         
-        for artist in tqdm(artists[0:20]):
+        for artist in tqdm(artists):
             grouped_songs = group_songs(artist, bucket_name)
             blob = bucket.blob(f"{artist['full_blob_name']}/grouped_songs.json")
             blob.upload_from_string(
