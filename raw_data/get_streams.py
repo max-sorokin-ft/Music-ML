@@ -120,6 +120,11 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
                     url = f"https://api.spotify.com/v1/tracks?ids={ids_str}"
                     headers = {"Authorization": f"Bearer {token}"}
                     response = requests.get(url, headers=headers, timeout=10)
+
+                    if response.status_code == 429:
+                        retry_after = response.headers.get("Retry-After")
+                        logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+
                     response.raise_for_status()
                     data = response.json()
 
@@ -140,7 +145,7 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
         return all_tracks
     except Exception as e:
         logger.error(f"Error fetching tracks from Spotify: {last_exception}. Failed after {max_retries} attempts.")
-        raise
+        raise last_exception
 
 
 def process_backfilled_tracks(tracks, artist):
@@ -228,6 +233,10 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
                     )
 
                     songs = update_songs_from_grouped(songs, grouped_songs)
+                else:
+                    logger.info(
+                        f"No missing IDs found for {artist['artist']}"
+                    )
 
                 blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
                 blob.upload_from_string(
@@ -267,13 +276,17 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    artists = get_artists_from_gcs(
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
-    )
+    try:
+        artists = get_artists_from_gcs(
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
+        )
 
-    write_streams_to_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
+        write_streams_to_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+        )
+    except Exception as e:
+        logger.error(f"Error running the script get_streams.py: {e}")
+        raise

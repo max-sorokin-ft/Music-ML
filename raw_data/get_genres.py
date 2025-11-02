@@ -105,12 +105,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    artists = get_artists_from_gcs(
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
-    )
-    write_genres_to_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
+    try:
+        artists = get_artists_from_gcs(
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
+        )
+        write_genres_to_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+        )
+    except Exception as e:
+        logger.error(f"Error running the script get_genres.py: {e}")
+        raise

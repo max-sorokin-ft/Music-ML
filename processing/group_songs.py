@@ -192,7 +192,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
         return grouped_songs
     except Exception as e:
         logger.error(f"Error grouping song for artist {artist['artist']}: {e}")
-        raise Exception(f"Error grouping song for artist {artist['artist']}: {e}")
+        raise
 
 
 def write_grouped_songs_to_gcs(artists, bucket_name, base_blob_name):
@@ -214,9 +214,7 @@ def write_grouped_songs_to_gcs(artists, bucket_name, base_blob_name):
         logger.error(
             f"Error writing grouped songs to gcs bucket {bucket_name} with blob name {base_blob_name}: {e}"
         )
-        raise Exception(
-            f"Error writing grouped songs to gcs bucket {bucket_name} with blob name {base_blob_name}: {e}"
-        )
+        raise
 
 
 if __name__ == "__main__":
@@ -235,12 +233,16 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    artists = get_artists_from_gcs(
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
-    )
-    write_grouped_songs_to_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
+    try:
+        artists = get_artists_from_gcs(
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
+        )
+        write_grouped_songs_to_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+        )
+    except Exception as e:
+        logger.error(f"Error running the script group_songs.py: {e}")
+        raise

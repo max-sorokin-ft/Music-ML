@@ -93,7 +93,7 @@ def process_kworb_html(page_number):
         raise
 
 
-def fetch_artists_spotify(batch_artist_list, token, max_retries=3, sleep_time=1):
+def fetch_artists_spotify(batch_artist_list, token, max_retries=2, sleep_time=1):
     """Gets batch of artists from the spotify api"""
     last_exception = None
     for attempt in range(max_retries):
@@ -112,7 +112,6 @@ def fetch_artists_spotify(batch_artist_list, token, max_retries=3, sleep_time=1)
             if response.status_code == 429:
                 retry_after = response.headers.get("Retry-After")
                 logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-                break
 
             response.raise_for_status()
             return response.json()
@@ -126,7 +125,7 @@ def fetch_artists_spotify(batch_artist_list, token, max_retries=3, sleep_time=1)
     logger.error(
         f"Error fetching artists from spotify api: {last_exception}. Failed after {max_retries} attempts."
     )
-    raise
+    raise last_exception
 
 
 def process_artists_spotify(artists, batch_size=50):
@@ -193,10 +192,14 @@ if __name__ == "__main__":
         help="The page number of the kworb's page to scrape",
     )
     args = parser.parse_args()
-    artists = process_kworb_html(args.page_number)
-    artists = process_artists_spotify(artists)
-    write_artists_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}",
-    )
+    try:
+        artists = process_kworb_html(args.page_number)
+        artists = process_artists_spotify(artists)
+        write_artists_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}",
+        )
+    except Exception as e:
+        logger.error(f"Error running the script get_artists.py: {e}")
+        raise

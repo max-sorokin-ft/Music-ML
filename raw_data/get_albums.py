@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 BUCKET_NAME = "music-ml-data"
 
 
-def fetch_albums_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
+def fetch_albums_spotify(spotify_artist_id, token, max_retries=2, sleep_time=1):
     """Gets the albums from the spotify api for a given artist"""
     url = f"https://api.spotify.com/v1/artists/{spotify_artist_id}/albums"
     headers = {"Authorization": f"Bearer {token}"}
@@ -37,7 +37,6 @@ def fetch_albums_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
                 if response.status_code == 429:
                     retry_after = response.headers.get("Retry-After")
                     logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-                    break
 
                 response.raise_for_status()
                 data = response.json()
@@ -52,7 +51,7 @@ def fetch_albums_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
                 time.sleep(backoff_time)
         if not success:
             logger.error(f"Error getting albums from Spotify for artist {spotify_artist_id}: {last_exception}. Failed after {max_retries} attempts.")    
-            raise
+            raise last_exception
 
         all_album_items.extend(data.get("items", []))
 
@@ -127,14 +126,17 @@ if __name__ == "__main__":
         help="The batch number of the artists",
     )
     args = parser.parse_args()
+    try:
+        artists = get_artists_from_gcs(
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
+        )
 
-    artists = get_artists_from_gcs(
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
-    )
-
-    write_albums_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
+        write_albums_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+        )
+    except Exception as e:
+        logger.error(f"Error running the script get_albums.py: {e}")
+        raise

@@ -22,7 +22,7 @@ BUCKET_NAME = "music-ml-data"
 SKIT_WORDS = ["skit", "outro", "intro", "commentary", "interlude", "dialogue", "dialog", "monologue"]
 
 
-def fetch_album_songs_spotify(album_id, token, max_retries=3, sleep_time=1):
+def fetch_album_songs_spotify(album_id, token, max_retries=2, sleep_time=1):
     """Gets the songs from the spotify api"""
     last_exception = None
     for attempt in range(max_retries):
@@ -35,7 +35,6 @@ def fetch_album_songs_spotify(album_id, token, max_retries=3, sleep_time=1):
             if response.status_code == 429:
                     retry_after = response.headers.get("Retry-After")
                     logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-                    break
 
             response.raise_for_status()
             return response.json()
@@ -47,10 +46,10 @@ def fetch_album_songs_spotify(album_id, token, max_retries=3, sleep_time=1):
             )
             time.sleep(backoff_time)
     logger.error(f"Error getting album songs from spotify: {last_exception}. Failed after {max_retries} attempts.")
-    raise
+    raise last_exception
 
 
-def fetch_top_tracks_spotify(artist_id, token, max_retries=3, sleep_time=1):
+def fetch_top_tracks_spotify(artist_id, token, max_retries=2, sleep_time=1):
     """Gets the top tracks from the spotify api for a given artist"""
     last_exception = None
     for attempt in range(max_retries):
@@ -62,7 +61,6 @@ def fetch_top_tracks_spotify(artist_id, token, max_retries=3, sleep_time=1):
             if response.status_code == 429:
                     retry_after = response.headers.get("Retry-After")
                     logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-                    break
             
             response.raise_for_status()
             return response.json()
@@ -74,7 +72,7 @@ def fetch_top_tracks_spotify(artist_id, token, max_retries=3, sleep_time=1):
             )
             time.sleep(backoff_time)
     logger.error(f"Error getting artist top tracks from spotify: {last_exception}. Failed after {max_retries} attempts.")
-    raise
+    raise last_exception
 
 
 def process_album_songs_spotify(album, token, duration_threshold=50000):
@@ -131,7 +129,7 @@ def process_top_tracks_spotify(artist, token, top_n_tracks=15):
             individual_song["release_date"] = track["album"]["release_date"]
             individual_song["duration_ms"] = track["duration_ms"]
             individual_song["explicit"] = track["explicit"]
-            individual_song["images"] = track["album"]["images"]
+            individual_song["images"] = [image["url"] for image in track["album"]["images"]]
             top_songs.append(individual_song)
         return top_songs
     except Exception as e:
@@ -141,7 +139,7 @@ def process_top_tracks_spotify(artist, token, top_n_tracks=15):
 
 def dedupe_single_songs(artist, token, bucket_name):
     """Dedupe the songs. This removes songs that are already in the albums, and leaves singles
-    in the top 10 songs of the artist."""
+    in the top 15 songs of the artist."""
     try:
         deduped_songs = []
         top_songs = process_top_tracks_spotify(artist, token)
@@ -182,7 +180,7 @@ def write_album_songs_gcs(artists, bucket_name, base_blob_name):
                     all_album_songs.extend(songs)
                     time.sleep(0.5)
             logger.info(
-                f"Successfully wrote albums' songs for {len(albums)} albums for artist {artist['artist']} to gcs bucket {bucket_name} with blob name {base_blob_name} and seperate folders for each album."
+                f"Successfully wrote albums' songs for {len(albums)} albums for artist {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']} and seperate folders for each album."
             )
             blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
             blob.upload_from_string(
@@ -190,10 +188,10 @@ def write_album_songs_gcs(artists, bucket_name, base_blob_name):
                 content_type="application/json",
             )
             logger.info(
-                f"Successfully wrote {len(all_album_songs)} albums' songs for {artist['artist']} to gcs bucket {bucket_name} with blob name {base_blob_name}/songs.json"
+                f"Successfully wrote {len(all_album_songs)} albums' songs for {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/songs.json"
             )
         logger.info(
-            f"Successfully wrote albums' songs for {len(artists)} artists to gcs bucket {bucket_name} with blob name {base_blob_name}"
+            f"Successfully wrote albums' songs for {len(artists)} artists to gcs bucket {bucket_name} with blob name {base_blob_name}."
         )
     except Exception as e:
         logger.error(
@@ -220,7 +218,7 @@ def write_single_songs_gcs(artists, bucket_name, base_blob_name):
                     content_type="application/json",
                 )
             logger.info(
-                f"Successfully wrote {len(single_songs)} single songs for artist {artist['artist']} to gcs bucket {bucket_name} with blob name {base_blob_name} and seperate folders for each single."
+                f"Successfully wrote {len(single_songs)} single songs for artist {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']} and seperate folders for each single."
             )
             blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
             existing_songs = json.loads(blob.download_as_string())
@@ -258,18 +256,22 @@ if __name__ == "__main__":
         help="The batch number of the artists",
     )
     args = parser.parse_args()
-    artists = get_artists_from_gcs(
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
-    )
+    try:
+        artists = get_artists_from_gcs(
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
+        )
 
-    write_album_songs_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
-    write_single_songs_gcs(
-        artists,
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
-    )
+        write_album_songs_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+        )
+        write_single_songs_gcs(
+            artists,
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+        )
+    except Exception as e:
+        logger.error(f"Error running the script get_songs.py: {e}")
+        raise
