@@ -28,7 +28,7 @@ def fetch_albums_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
 
     while True:
         success = False
-        e = None
+        last_exception = None
         for attempt in range(max_retries):
             try:
                 response = requests.get(
@@ -44,13 +44,14 @@ def fetch_albums_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
                 success = True
                 break
             except Exception as e:
+                last_exception = e
                 backoff_time = sleep_time * (2**attempt)
                 logger.warning(
                     f"Error getting artist's albums page from Spotify: {e}. Retrying in {backoff_time} seconds."
                 )
                 time.sleep(backoff_time)
         if not success:
-            logger.error(f"Error getting albums from Spotify for artist {spotify_artist_id}: {e}. Failed after {max_retries} attempts.")    
+            logger.error(f"Error getting albums from Spotify for artist {spotify_artist_id}: {last_exception}. Failed after {max_retries} attempts.")    
             raise
 
         all_album_items.extend(data.get("items", []))

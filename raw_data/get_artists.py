@@ -95,7 +95,7 @@ def process_kworb_html(page_number):
 
 def fetch_artists_spotify(batch_artist_list, token, max_retries=3, sleep_time=1):
     """Gets batch of artists from the spotify api"""
-    e = None
+    last_exception = None
     for attempt in range(max_retries):
         try:
             headers = {"Authorization": f"Bearer {token}"}
@@ -117,13 +117,14 @@ def fetch_artists_spotify(batch_artist_list, token, max_retries=3, sleep_time=1)
             response.raise_for_status()
             return response.json()
         except Exception as e:
+            last_exception = e
             backoff_time = sleep_time * (2**attempt)
             logger.warning(
                 f"Error getting artists from spotify api: {e}. Retrying in {backoff_time} seconds."
             )
             time.sleep(backoff_time)
     logger.error(
-        f"Error fetching artists from spotify api: {e}. Failed after {max_retries} attempts."
+        f"Error fetching artists from spotify api: {last_exception}. Failed after {max_retries} attempts."
     )
     raise
 

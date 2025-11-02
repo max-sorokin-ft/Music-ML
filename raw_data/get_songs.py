@@ -24,7 +24,7 @@ SKIT_WORDS = ["skit", "outro", "intro", "commentary", "interlude", "dialogue", "
 
 def fetch_album_songs_spotify(album_id, token, max_retries=3, sleep_time=1):
     """Gets the songs from the spotify api"""
-    e = None
+    last_exception = None
     for attempt in range(max_retries):
         try:
             url = f"https://api.spotify.com/v1/albums/{album_id}/tracks"
@@ -40,18 +40,19 @@ def fetch_album_songs_spotify(album_id, token, max_retries=3, sleep_time=1):
             response.raise_for_status()
             return response.json()
         except Exception as e:
+            last_exception = e
             backoff_time = sleep_time * (2**attempt)
             logger.warning(
                 f"Error getting album songs from spotify: {e}. Retrying in {backoff_time} seconds."
             )
             time.sleep(backoff_time)
-    logger.error(f"Error getting album songs from spotify: {e}. Failed after {max_retries} attempts.")
+    logger.error(f"Error getting album songs from spotify: {last_exception}. Failed after {max_retries} attempts.")
     raise
 
 
 def fetch_top_tracks_spotify(artist_id, token, max_retries=3, sleep_time=1):
     """Gets the top tracks from the spotify api for a given artist"""
-    e = None
+    last_exception = None
     for attempt in range(max_retries):
         try:
             url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks"
@@ -66,12 +67,13 @@ def fetch_top_tracks_spotify(artist_id, token, max_retries=3, sleep_time=1):
             response.raise_for_status()
             return response.json()
         except Exception as e:
+            last_exception = e
             backoff_time = sleep_time * (2**attempt)
             logger.warning(
                 f"Error getting artist top tracks from spotify: {e}. Retrying in {backoff_time} seconds."
             )
             time.sleep(backoff_time)
-    logger.error(f"Error getting artist top tracks from spotify: {e}. Failed after {max_retries} attempts.")
+    logger.error(f"Error getting artist top tracks from spotify: {last_exception}. Failed after {max_retries} attempts.")
     raise
 
 
@@ -104,7 +106,7 @@ def process_album_songs_spotify(album, token, duration_threshold=50000):
         return songs_list
     except Exception as e:
         logger.error(f"Error processing album songs from spotify: {e}")
-        raise Exception(f"Error processing album songs from spotify: {e}")
+        raise
 
 
 def process_top_tracks_spotify(artist, token, top_n_tracks=15):

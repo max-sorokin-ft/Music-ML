@@ -110,7 +110,7 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
     """Fetches tracks from Spotify API in batches of 50"""
     try:
         all_tracks = []
-
+        last_exception = None
         for i in range(0, len(track_ids), 50):
             batch = track_ids[i : i + 50]
             ids_str = ",".join(batch)
@@ -130,15 +130,16 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
                     time.sleep(0.1)
                     break
                 except Exception as e:
+                    last_exception = e
                     backoff_time = sleep_time * (2**attempt)
                     logger.warning(
-                        f"Error fetching tracks batch: {e}. Retrying in {backoff_time}s (attempt {attempt+1}/{max_retries})"
+                        f"Error fetching tracks batch: {e}. Retrying in {backoff_time} seconds."
                     )
                     time.sleep(backoff_time)
 
         return all_tracks
     except Exception as e:
-        logger.error(f"Error fetching tracks from Spotify: {e}")
+        logger.error(f"Error fetching tracks from Spotify: {last_exception}. Failed after {max_retries} attempts.")
         raise
 
 
