@@ -3,7 +3,7 @@ import logging
 from playwright.sync_api import sync_playwright
 from tqdm import tqdm
 from argparse import ArgumentParser
-from scripts.utils.gcs_utils import get_artists_from_gcs
+from storage.gcs_utils import get_artists_from_gcs
 from google.cloud import storage
 import json
 
@@ -56,7 +56,7 @@ def get_artist_genres(artist_id):
             return spotify_genres
     except Exception as e:
         logger.error(f"Error getting genres for artist {artist_id}: {e}")
-        raise Exception(f"Error getting genres for artist {artist_id}: {e}")
+        raise
 
 
 def write_genres_to_gcs(artists, bucket_name, base_blob_name):
@@ -86,9 +86,7 @@ def write_genres_to_gcs(artists, bucket_name, base_blob_name):
         logger.error(
             f"Error writing genres to gcs bucket {bucket_name} with blob name {base_blob_name}/artists.json: {e}"
         )
-        raise Exception(
-            f"Error writing genres to gcs bucket {bucket_name} with blob name {base_blob_name}/artists.json: {e}"
-        )
+        raise
 
 
 if __name__ == "__main__":

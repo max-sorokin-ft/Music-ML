@@ -8,7 +8,7 @@ import logging
 from google.cloud import storage
 import argparse
 
-from scripts.auth import get_spotify_access_token
+from auth import get_spotify_access_token
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -20,7 +20,7 @@ BASE_URL = "https://kworb.net/spotify/listeners{page_number}.html"
 BUCKET_NAME = "music-ml-data"
 
 
-def get_artists_kworb(page_number):
+def fetch_artists_kworb(page_number):
     """Gets the html of the page from kworb's page"""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -39,15 +39,13 @@ def get_artists_kworb(page_number):
         return response.text
     except Exception as e:
         logger.error(f"Error getting html page {page_number} for kworb artists: {e}")
-        raise RuntimeError(
-            f"Error getting html page {page_number} for kworb artists: {e}"
-        )
+        raise
 
 
 def process_kworb_html(page_number):
     """Processes the html of the page from kworb's page"""
     try:
-        html = get_artists_kworb(page_number)
+        html = fetch_artists_kworb(page_number)
 
         soup = BeautifulSoup(html, "lxml")
         tr_list = soup.find_all("tr")
@@ -92,13 +90,12 @@ def process_kworb_html(page_number):
         logger.error(
             f"Error processing artists from kworb's html page {page_number}: {e}"
         )
-        raise Exception(
-            f"Error processing artists from kworb's html page {page_number}: {e}"
-        )
+        raise
 
 
-def fetch_artists_batch_spotify(batch_artist_list, token, max_retries=3, sleep_time=1):
+def fetch_artists_spotify(batch_artist_list, token, max_retries=3, sleep_time=1):
     """Gets batch of artists from the spotify api"""
+    e = None
     for attempt in range(max_retries):
         try:
             headers = {"Authorization": f"Bearer {token}"}
@@ -111,6 +108,12 @@ def fetch_artists_batch_spotify(batch_artist_list, token, max_retries=3, sleep_t
             params = {"ids": spotify_artist_ids_str}
 
             response = requests.get(url, headers=headers, params=params, timeout=10)
+
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                break
+
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -120,20 +123,18 @@ def fetch_artists_batch_spotify(batch_artist_list, token, max_retries=3, sleep_t
             )
             time.sleep(backoff_time)
     logger.error(
-        f"Error getting artists from spotify api. Failed after {max_retries} attempts."
+        f"Error fetching artists from spotify api: {e}. Failed after {max_retries} attempts."
     )
-    raise RuntimeError(
-        f"Error getting artists from spotify api. Failed after {max_retries} attempts."
-    )
+    raise
 
 
-def process_spotify_response(artists, batch_size=50):
+def process_artists_spotify(artists, batch_size=50):
     """Processes the spotify response for batches of artists"""
     token = get_spotify_access_token()
     try:
         for i in tqdm(range(0, len(artists), batch_size)):
             batch_artist_list = artists[i : i + batch_size]
-            response = fetch_artists_batch_spotify(batch_artist_list, token)
+            response = fetch_artists_spotify(batch_artist_list, token)
             for index, artist in enumerate(batch_artist_list):
                 artist["spotify_url"] = response["artists"][index]["external_urls"][
                     "spotify"
@@ -149,10 +150,10 @@ def process_spotify_response(artists, batch_size=50):
         return artists
     except Exception as e:
         logger.error(f"Error processing spotify response: {e}")
-        raise Exception(f"Error processing spotify response: {e}")
+        raise
 
 
-def write_artists_to_gcs(
+def write_artists_gcs(
     artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE
 ):
     """Writes the artist list to a json file in a gcp bucket"""
@@ -179,9 +180,7 @@ def write_artists_to_gcs(
             logger.error(
                 f"Error writing artists to gcs bucket {bucket_name} with blob name {base_blob_name}/batch{batch_number}/artists.json: {e}"
             )
-            raise Exception(
-                f"Error writing artists to gcs bucket {bucket_name} with blob name {base_blob_name}/batch{batch_number}/artists.json: {e}"
-            )
+            raise
 
 
 if __name__ == "__main__":
@@ -194,8 +193,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     artists = process_kworb_html(args.page_number)
-    artists = process_spotify_response(artists)
-    write_artists_to_gcs(
+    artists = process_artists_spotify(artists)
+    write_artists_gcs(
         artists,
         BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}",

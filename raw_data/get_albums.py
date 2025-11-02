@@ -6,8 +6,8 @@ import time
 from tqdm import tqdm
 import argparse
 
-from scripts.auth import get_spotify_access_token
-from scripts.utils.gcs_utils import get_artists_from_gcs
+from auth import get_spotify_access_token
+from storage.gcs_utils import get_artists_from_gcs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 BUCKET_NAME = "music-ml-data"
 
 
-def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
+def fetch_albums_spotify(spotify_artist_id, token, max_retries=3, sleep_time=1):
     """Gets the albums from the spotify api for a given artist"""
     url = f"https://api.spotify.com/v1/artists/{spotify_artist_id}/albums"
     headers = {"Authorization": f"Bearer {token}"}
@@ -28,11 +28,16 @@ def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=
 
     while True:
         success = False
+        e = None
         for attempt in range(max_retries):
             try:
                 response = requests.get(
                     page_url, headers=headers, params=page_params, timeout=10
                 )
+                if response.status_code == 429:
+                    retry_after = response.headers.get("Retry-After")
+                    logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                    break
 
                 response.raise_for_status()
                 data = response.json()
@@ -41,13 +46,12 @@ def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=
             except Exception as e:
                 backoff_time = sleep_time * (2**attempt)
                 logger.warning(
-                    f"Error getting artist's albums page from Spotify: {e}. Retrying in {backoff_time} seconds (attempt {attempt+1}/{max_retries})."
+                    f"Error getting artist's albums page from Spotify: {e}. Retrying in {backoff_time} seconds."
                 )
                 time.sleep(backoff_time)
         if not success:
-            raise RuntimeError(
-                f"Error getting albums from Spotify for artist {spotify_artist_id}. Failed after {max_retries} attempts."
-            )
+            logger.error(f"Error getting albums from Spotify for artist {spotify_artist_id}: {e}. Failed after {max_retries} attempts.")    
+            raise
 
         all_album_items.extend(data.get("items", []))
 
@@ -57,11 +61,11 @@ def get_albums_from_spotify(spotify_artist_id, token, max_retries=3, sleep_time=
         page_url, page_params = next_url, None
 
 
-def process_albums_from_spotify(artist, token):
+def process_albums_spotify(artist, token):
     """Processes the albums for a given artist from the spotify api"""
     try:
         album_list = []
-        all_album_items = get_albums_from_spotify(artist["spotify_artist_id"], token)
+        all_album_items = fetch_albums_spotify(artist["spotify_artist_id"], token)
         for album in all_album_items:
             individual_album = {}
             individual_album["spotify_album_id"] = album["id"]
@@ -77,10 +81,10 @@ def process_albums_from_spotify(artist, token):
         return album_list
     except Exception as e:
         logger.error(f"Error processing albums from spotify: {e}")
-        raise Exception(f"Error processing albums from spotify: {e}")
+        raise
 
 
-def write_albums_to_gcs(artists, bucket_name, base_blob_name):
+def write_albums_gcs(artists, bucket_name, base_blob_name):
     """Writes the albums to the gcs bucket"""
     try:
         token = get_spotify_access_token()
@@ -88,7 +92,7 @@ def write_albums_to_gcs(artists, bucket_name, base_blob_name):
         bucket = client.bucket(bucket_name)
         for artist in tqdm(artists):
             blob = bucket.blob(f"{artist['full_blob_name']}/albums.json")
-            albums = process_albums_from_spotify(artist, token)
+            albums = process_albums_spotify(artist, token)
             blob.upload_from_string(
                 json.dumps(albums, indent=3, ensure_ascii=False),
                 content_type="application/json",
@@ -104,9 +108,7 @@ def write_albums_to_gcs(artists, bucket_name, base_blob_name):
         logger.error(
             f"Error writing albums to gcs bucket {bucket_name} with base blob name {base_blob_name}: {e}"
         )
-        raise Exception(
-            f"Error writing albums to gcs bucket {bucket_name} with base blob name {base_blob_name}: {e}"
-        )
+        raise
 
 
 if __name__ == "__main__":
@@ -130,7 +132,7 @@ if __name__ == "__main__":
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
 
-    write_albums_to_gcs(
+    write_albums_gcs(
         artists,
         BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",

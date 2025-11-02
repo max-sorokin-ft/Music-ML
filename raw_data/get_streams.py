@@ -7,13 +7,13 @@ from google.cloud import storage
 import argparse
 import time
 
-from scripts.utils.gcs_utils import (
+from storage.gcs_utils import (
     get_artists_from_gcs,
     get_artist_songs_from_gcs,
     get_artist_grouped_songs_from_gcs,
 )
-from scripts.auth import get_spotify_access_token
-from scripts.utils.group_songs import group_songs
+from auth import get_spotify_access_token
+from processing.group_songs import group_songs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -36,9 +36,7 @@ def get_artist_songs_kworb(artist):
         logger.error(
             f"Error getting html for artist {artist['spotify_artist_id']}: {e}"
         )
-        raise RuntimeError(
-            f"Error getting html for artist {artist['spotify_artist_id']}: {e}"
-        )
+        raise
 
 
 def process_artist_songs_kworb(artist):
@@ -64,9 +62,7 @@ def process_artist_songs_kworb(artist):
         logger.error(
             f"Error processing songs for artist {artist['spotify_artist_id']}: {e}"
         )
-        raise Exception(
-            f"Error processing songs for artist {artist['spotify_artist_id']}: {e}"
-        )
+        raise
 
 
 def match_streams_to_grouped_songs(grouped_songs, kworb_songs):
@@ -88,7 +84,7 @@ def match_streams_to_grouped_songs(grouped_songs, kworb_songs):
         return grouped_songs
     except Exception as e:
         logger.error(f"Error matching streams to grouped songs: {e}")
-        raise Exception(f"Error matching streams to grouped songs: {e}")
+        raise
 
 
 def collect_missing_ids(grouped_songs, kworb_songs):
@@ -107,7 +103,7 @@ def collect_missing_ids(grouped_songs, kworb_songs):
         return missing_ids
     except Exception as e:
         logger.error(f"Error collecting missing IDs: {e}")
-        raise Exception(f"Error collecting missing IDs: {e}")
+        raise
 
 
 def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
@@ -143,7 +139,7 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
         return all_tracks
     except Exception as e:
         logger.error(f"Error fetching tracks from Spotify: {e}")
-        raise Exception(f"Error fetching tracks from Spotify: {e}")
+        raise
 
 
 def process_backfilled_tracks(tracks, artist):
@@ -175,7 +171,7 @@ def process_backfilled_tracks(tracks, artist):
         return processed_songs
     except Exception as e:
         logger.error(f"Error processing backfilled tracks: {e}")
-        raise Exception(f"Error processing backfilled tracks: {e}")
+        raise
 
 
 def update_songs_from_grouped(songs, grouped_songs):
@@ -192,7 +188,7 @@ def update_songs_from_grouped(songs, grouped_songs):
         return songs
     except Exception as e:
         logger.error(f"Error updating songs from grouped: {e}")
-        raise Exception(f"Error updating songs from grouped: {e}")
+        raise
 
 
 def write_streams_to_gcs(artists, bucket_name, base_blob_name):
@@ -257,9 +253,7 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
         logger.error(
             f"Error writing streams to gcs bucket {bucket_name} with base blob name {base_blob_name}: {e}"
         )
-        raise Exception(
-            f"Error writing streams to gcs bucket {bucket_name} with base blob name {base_blob_name}: {e}"
-        )
+        raise
 
 
 if __name__ == "__main__":
