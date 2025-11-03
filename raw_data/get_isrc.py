@@ -34,14 +34,13 @@ def fetch_isrc_spotify(songs, token, max_retries=3, sleep_time=1):
             if response.status_code == 429:
                 retry_after = response.headers.get("Retry-After")
                 logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-                break
 
             response.raise_for_status()
             return response.json()
         except Exception as e:
             last_exception = e
             backoff_time = sleep_time * (2**attempt)
-            logger.error(f"Error fetching ISRC from Spotify API: {e}. Retrying in {backoff_time} seconds.")
+            logger.warning(f"Error fetching ISRC from Spotify API: {e}. Retrying in {backoff_time} seconds.")
             time.sleep(backoff_time)
     logger.error(f"Error fetching ISRC from Spotify API: {last_exception}. Failed after {max_retries} attempts.")
     raise last_exception
