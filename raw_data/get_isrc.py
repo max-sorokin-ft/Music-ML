@@ -54,7 +54,7 @@ def process_isrc_spotify(songs, batch_size=50):
             response = fetch_isrc_spotify(batch_songs, token)
             for index, song in enumerate(batch_songs):
                 song["isrc"] = response["tracks"][index]["external_ids"]["isrc"]
-            time.sleep(1)
+            time.sleep(0.8)
         return songs
     except Exception as e:
         logger.error(f"Error processing ISRC from Spotify API: {e}")
