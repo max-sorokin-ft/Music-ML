@@ -76,7 +76,7 @@ def create_songs_metadata_parquet(artists, bucket_name, base_blob_name):
             songs.extend(artist_songs)
         
         df = pd.json_normalize(songs)
-        # df = df.drop(columns=['images'], errors='ignore') 
+        df = df.drop(columns=['images'], errors='ignore') 
          
         df = add_popularity_from_streams(df)
         song_id_popularity_map = process_popularity_spotify(df)
@@ -185,7 +185,7 @@ def process_popularity_spotify(df, batch_size=50):
         song_id_popularity_map = {}
         song_ids = collect_songs_with_zero_streams(df)
 
-        for i in range(0, len(song_ids), batch_size):
+        for i in tqdm(range(0, len(song_ids), batch_size)):
             batch_song_ids = song_ids[i: i + batch_size]
             response = fetch_popularity_spotify(batch_song_ids, token)
             for index, id in enumerate(batch_song_ids):
@@ -236,8 +236,7 @@ if __name__ == "__main__":
         BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
-    # create_artists_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
-    # create_albums_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
-    # create_songs_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
-    read_parquet()
+    create_artists_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
+    create_albums_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
+    create_songs_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
 

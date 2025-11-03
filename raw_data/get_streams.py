@@ -170,7 +170,7 @@ def process_backfilled_tracks(tracks, artist):
             individual_song["release_date"] = track["album"]["release_date"]
             individual_song["duration_ms"] = track["duration_ms"]
             individual_song["explicit"] = track["explicit"]
-            individual_song["images"] = track["album"]["images"]
+            individual_song["images"] = [image["url"] for image in track["album"]["images"]]
 
             processed_songs.append(individual_song)
 
