@@ -147,6 +147,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                         "song": song["song"],
                         "duration_ms": song["duration_ms"],
                         "album": song["album"],
+                        "spotify_popularity": song["spotify_popularity"],
                     }
                 )
             else:
@@ -155,14 +156,18 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                 for i in range(1, variant_counter[normalized_name] + 1):
                     matched_key = normalized_name if i == 1 else f"{normalized_name}_variant{i}"
 
-                    duration_diff = abs(
+                    for grouped_song in grouped_songs[matched_key]["variants"]:
+                        duration_diff = abs(
                             song["duration_ms"]
-                            - grouped_songs[matched_key]["variants"][0]["duration_ms"]
-                    )
-                    if duration_diff < threshold:
-                        found_match = True
+                            - grouped_song["duration_ms"]
+                        )
+                        if duration_diff < threshold:
+                            found_match = True
+                            break
+                    
+                    if not found_match:
                         break
-                
+                    
                 if found_match:
                     grouped_songs[matched_key]["variants"].append(
                         {
@@ -172,6 +177,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                             "song": song["song"],
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
+                            "spotify_popularity": song["spotify_popularity"],
                         }
                     )
                 else:
@@ -186,6 +192,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                             "song": song["song"],
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
+                            "spotify_popularity": song["spotify_popularity"],
                         }
                     )
         

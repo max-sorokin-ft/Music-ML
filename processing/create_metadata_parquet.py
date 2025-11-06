@@ -8,7 +8,6 @@ import gcsfs
 from tqdm import tqdm
 import numpy as np
 import requests
-from auth import get_spotify_access_token
 import logging
 import time
 
@@ -79,9 +78,9 @@ def create_songs_metadata_parquet(artists, bucket_name, base_blob_name):
         df = df.drop(columns=['images'], errors='ignore') 
          
         df = add_popularity_from_streams(df)
-        song_id_popularity_map = process_popularity_spotify(df)
-        df = add_popularity_to_df(df, song_id_popularity_map)
-        df = adjust_spotify_popularity(df)
+        df = override_error_songs_popularity(df)
+        df = add_spotify_popularity(df)
+        df.drop(columns=['spotify_popularity'], errors='ignore', inplace=True)
 
         buffer = BytesIO()
         df.to_parquet(buffer, index=False)
@@ -97,13 +96,7 @@ def create_songs_metadata_parquet(artists, bucket_name, base_blob_name):
         raise
 
 def add_popularity_from_streams(df):
-    """
-    Adds a 'popularity' column to the DataFrame based on total_streams.
-    Songs with 0 or missing streams get popularity = 0.
-    Others are linearly interpolated between fixed anchor points.
-    """
     try:
-        # Anchor points (streams → popularity)
         STREAMS = np.array([
             0,
             25_000_000,
@@ -131,105 +124,45 @@ def add_popularity_from_streams(df):
         df["popularity"] = np.nan
 
         non_zero_streams = df["total_streams"] > 0
-
         clipped_streams = df.loc[non_zero_streams, "total_streams"].clip(STREAMS.min(), STREAMS.max()).to_numpy()
         df.loc[non_zero_streams, "popularity"] = np.interp(clipped_streams, STREAMS, POPULARITY)
-
         df["popularity"] = df["popularity"].round().astype("Int64")
         return df
     except Exception as e:
         logger.error(f"Error adding popularity from streams: {e}")
         raise
-    
 
-def collect_songs_with_zero_streams(df):
+def override_error_songs_popularity(df, threshold=20):
     try:
-        song_ids = df.loc[df["total_streams"] == 0, "spotify_song_id"].tolist()
-        return song_ids
+        error_songs = (df["total_streams"] > 0) & (df["spotify_popularity"] > df["popularity"] + threshold)
+        df.loc[error_songs, "popularity"] = df.loc[error_songs, "spotify_popularity"]
+
+        logger.info(f"Overridden {error_songs.sum()} error songs popularity.")
+        return df
     except Exception as e:
-        logger.error(f"Error collecting songs with zero streams: {e}")
+        logger.error(f"Error overriding error songs popularity: {e}")
         raise
 
-def fetch_popularity_spotify(song_ids, token, max_retries=2, sleep_time=1):
-    last_exception = None
-    for attempt in range(max_retries):
-        try:
-            url = f"https://api.spotify.com/v1/tracks"
-
-            song_ids_str = ",".join(song_ids)
-            params = {
-                "ids": song_ids_str
-            }
-            headers = {
-                "Authorization": f"Bearer {token}"
-            }
-            response = requests.get(url, headers=headers, params=params)
-
-            if response.status_code == 429:
-                retry_after = response.headers.get("Retry-After")
-                logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-
-            response.raise_for_status()
-            return response.json()
-        except Exception as e:
-            last_exception = e
-            backoff_time = sleep_time * (2**attempt)
-            logger.warning(f"Error fetching popularity from Spotify: {e}. Retrying in {backoff_time} seconds.")
-            time.sleep(backoff_time)
-        logger.error(f"Error fetching popularity from Spotify: {last_exception}. Failed after {max_retries} attempts.")
-        raise last_exception
-
-def process_popularity_spotify(df, batch_size=50):
-    token = get_spotify_access_token()
+def add_spotify_popularity(df):
     try:
-        song_id_popularity_map = {}
-        song_ids = collect_songs_with_zero_streams(df)
-
-        for i in tqdm(range(0, len(song_ids), batch_size)):
-            batch_song_ids = song_ids[i: i + batch_size]
-            response = fetch_popularity_spotify(batch_song_ids, token)
-            for index, id in enumerate(batch_song_ids):
-                song_id_popularity_map[id] = response["tracks"][index]["popularity"]
-        return song_id_popularity_map
+        songs_with_zero_streams = df["total_streams"] == 0
+        df.loc[songs_with_zero_streams, "popularity"] = df.loc[songs_with_zero_streams, "spotify_popularity"]
+        return df
     except Exception as e:
-        logger.error(f"Error processing popularity from Spotify: {e}")
+        logger.error(f"Error adding Spotify popularity: {e}")
         raise
-
-def add_popularity_to_df(df, song_id_popularity_map):
-    df["popularity"] = df["popularity"].fillna(df["spotify_song_id"].map(song_id_popularity_map))
-    return df
-
-def adjust_spotify_popularity(df):
-    df.loc[df["popularity"] <= 50, "popularity"] -= 10
-    df.loc[df["popularity"] > 50, "popularity"] += 10
-
-    df["popularity"] = df["popularity"].clip(0, 100)
-
-    return df
 
 def read_parquet():
     df = pd.read_parquet(f"gs://music-ml-data/parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}/songs.parquet", filesystem=fs)
-    # oasis_df = df[df["spotify_artist_id"] == "2DaxqgrOhkeH0fpeiQq2f4"]
-    # print(len(oasis_df[oasis_df["total_streams"] == 0]))
-    # print(len(oasis_df[oasis_df["total_streams"] > 0]))
-    # print(oasis_df["total_streams"].mean())
-    # print(oasis_df["total_streams"].median())
-    print(df.loc[df["song"] == "Miss Atomic Bomb"])
+    print(len(df))
+    print(len(df[df["popularity"] > 0]))
+    print(len(df[df["total_streams"] > 0]))
+    print(df.columns)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--page_number",
-        type=int,
-        default=1,
-        help="The number of the kworb's page",
-    )
-    parser.add_argument(
-        "--batch_number",
-        type=int,
-        default=1,
-        help="The batch number of the artists",
-    )
+    parser.add_argument("--page_number", type=int, default=1)
+    parser.add_argument("--batch_number", type=int, default=1)
     args = parser.parse_args()
 
     artists = get_artists_from_gcs(
@@ -239,4 +172,4 @@ if __name__ == "__main__":
     create_artists_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
     create_albums_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
     create_songs_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
-
+    # read_parquet()

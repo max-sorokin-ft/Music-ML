@@ -61,7 +61,7 @@ def process_artist_songs_kworb(artist):
     except Exception as e:
         logger.error(
             f"Error processing songs for artist {artist['spotify_artist_id']}: {e}"
-        )
+        ) 
         raise
 
 
@@ -69,18 +69,33 @@ def match_streams_to_grouped_songs(grouped_songs, kworb_songs):
     """Matches kworb streams to grouped songs and assigns streams to all variants in each group"""
     try:
         for song_data in grouped_songs.values():
-            streams = None
+            streams = []
+            spotify_popularities = []
             for variant in song_data["variants"]:
                 if variant["spotify_song_id"] in kworb_songs:
-                    streams = kworb_songs[variant["spotify_song_id"]]
-                    break
-
-            for variant in song_data["variants"]:
-                if streams:
-                    variant["total_streams"] = streams
+                    variant["total_streams"] = kworb_songs[variant["spotify_song_id"]]
+                    streams.append(kworb_songs[variant["spotify_song_id"]])
                 else:
                     variant["total_streams"] = 0
+                spotify_popularities.append(variant["spotify_popularity"])
 
+            for variant in song_data["variants"]:
+                variant["canonical"] = False
+            
+            if not streams:
+                for variant in song_data["variants"]:
+                    if variant["spotify_popularity"] == max(spotify_popularities):
+                        variant["canonical"] = True
+                        break
+            else:
+                for variant in song_data["variants"]:
+                    if variant["total_streams"] == max(streams):
+                        variant["canonical"] = True
+                        break
+            
+                for variant in song_data["variants"]:
+                        variant["total_streams"] = max(streams)
+                    
         return grouped_songs
     except Exception as e:
         logger.error(f"Error matching streams to grouped songs: {e}")
@@ -171,6 +186,7 @@ def process_backfilled_tracks(tracks, artist):
             individual_song["duration_ms"] = track["duration_ms"]
             individual_song["explicit"] = track["explicit"]
             individual_song["images"] = [image["url"] for image in track["album"]["images"]]
+            individual_song["spotify_popularity"] = track["popularity"]
 
             processed_songs.append(individual_song)
 
@@ -209,10 +225,6 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
                 songs = get_artist_songs_from_gcs(artist, bucket_name)
                 kworb_songs = process_artist_songs_kworb(artist)
                 grouped_songs = get_artist_grouped_songs_from_gcs(artist, bucket_name)
-
-                grouped_songs = match_streams_to_grouped_songs(
-                    grouped_songs, kworb_songs
-                )
 
                 missing_ids = collect_missing_ids(grouped_songs, kworb_songs)
 

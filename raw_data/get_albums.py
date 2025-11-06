@@ -99,7 +99,7 @@ def write_albums_gcs(artists, bucket_name, base_blob_name):
             )
             time.sleep(0.5)
             logger.info(
-                f"Successfully wrote albums for {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/albums.json"
+                f"Successfully wrote {len(albums)} albums for {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/albums.json"
             )
         logger.info(
             f"Successfully wrote albums for {len(artists)} artists to gcs bucket {bucket_name} with base blob name {base_blob_name}"
