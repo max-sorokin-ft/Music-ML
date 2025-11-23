@@ -120,7 +120,6 @@ def process_top_tracks_spotify(artist, token, top_n_tracks=15):
             individual_song = {}
             individual_song["spotify_song_id"] = track["id"]
             individual_song["spotify_album_id"] = track["album"]["id"]
-            individual_song["spotify_artist_id"] = artist["spotify_artist_id"]
             individual_song["song"] = track["name"]
             individual_song["album"] = track["album"]["name"]
             individual_song["artists"] = [artist["name"] for artist in track["artists"]]

@@ -187,6 +187,7 @@ def process_backfilled_tracks(tracks, artist):
             individual_song["explicit"] = track["explicit"]
             individual_song["images"] = [image["url"] for image in track["album"]["images"]]
             individual_song["spotify_popularity"] = track["popularity"]
+            individual_song["isrc"] = track["external_ids"]["isrc"]
 
             processed_songs.append(individual_song)
 
@@ -240,15 +241,16 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
                     )
 
                     grouped_songs = group_songs(artist, bucket_name, songs)
-                    grouped_songs = match_streams_to_grouped_songs(
-                        grouped_songs, kworb_songs
-                    )
-
-                    songs = update_songs_from_grouped(songs, grouped_songs)
                 else:
                     logger.info(
                         f"No missing IDs found for {artist['artist']}"
                     )
+
+                grouped_songs = match_streams_to_grouped_songs(
+                    grouped_songs, kworb_songs
+                )
+
+                songs = update_songs_from_grouped(songs, grouped_songs)
 
                 blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
                 blob.upload_from_string(

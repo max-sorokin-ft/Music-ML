@@ -69,9 +69,9 @@ def process_albums_spotify(artist, token):
         for album in all_album_items:
             individual_album = {}
             individual_album["spotify_album_id"] = album["id"]
-            individual_album["spotify_artist_id"] = artist["spotify_artist_id"]
             individual_album["album"] = album["name"]
-            individual_album["artist"] = artist["artist"]
+            individual_album["artists"] = [artist["name"] for artist in album["artists"]]
+            individual_album["artist_ids"] = [artist["id"] for artist in album["artists"]]
             individual_album["spotify_url"] = album["external_urls"]["spotify"]
             individual_album["type"] = album["album_type"]
             individual_album["release_date"] = album["release_date"]

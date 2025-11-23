@@ -102,6 +102,8 @@ def normalize_song_name(title: str) -> str:
         title = re.sub(pattern, '', title, flags=re.IGNORECASE)
 
     title = re.sub(r'\s*[\(\[\{]\s*\d{4}\s*[\)\]\}]', '', title)
+    # Remove standalone 4-digit years starting with 10..20 (e.g., 1995, 2011) anywhere in the title
+    title = re.sub(r'\b(1[0-9]{3}|20[0-9]{2})\b', '', title)
     
     title = title.translate(str.maketrans('', '', string.punctuation))
     
@@ -148,6 +150,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                         "duration_ms": song["duration_ms"],
                         "album": song["album"],
                         "spotify_popularity": song["spotify_popularity"],
+                        "isrc": song["isrc"],
                     }
                 )
             else:
@@ -178,6 +181,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
                             "spotify_popularity": song["spotify_popularity"],
+                            "isrc": song["isrc"],
                         }
                     )
                 else:
@@ -193,6 +197,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                             "duration_ms": song["duration_ms"],
                             "album": song["album"],
                             "spotify_popularity": song["spotify_popularity"],
+                            "isrc": song["isrc"],
                         }
                     )
         

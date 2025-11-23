@@ -132,7 +132,7 @@ def add_popularity_from_streams(df):
         logger.error(f"Error adding popularity from streams: {e}")
         raise
 
-def override_error_songs_popularity(df, threshold=20):
+def override_error_songs_popularity(df, threshold=45):
     try:
         error_songs = (df["total_streams"] > 0) & (df["spotify_popularity"] > df["popularity"] + threshold)
         df.loc[error_songs, "popularity"] = df.loc[error_songs, "spotify_popularity"]
@@ -155,9 +155,7 @@ def add_spotify_popularity(df):
 def read_parquet():
     df = pd.read_parquet(f"gs://music-ml-data/parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}/songs.parquet", filesystem=fs)
     print(len(df))
-    print(len(df[df["popularity"] > 0]))
-    print(len(df[df["total_streams"] > 0]))
-    print(df.columns)
+    print(len(df[df["spotify_artist_id"] == "3PhoLpVuITZKcymswpck5b"]))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -172,4 +170,3 @@ if __name__ == "__main__":
     create_artists_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
     create_albums_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
     create_songs_metadata_parquet(artists, BUCKET_NAME, f"parquet_metadata/artists_kworbpage{args.page_number}/batch{args.batch_number}")
-    # read_parquet()
