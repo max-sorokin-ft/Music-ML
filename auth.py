@@ -6,9 +6,9 @@ import os
 load_dotenv()
 
 def get_spotify_access_token(profile):
-    profile_number = int(profile)
-    spotify_client_id = os.getenv(f"SPOTIFY_CLIENT_ID_{profile_number}")
-    spotify_client_secret = os.getenv(f"SPOTIFY_CLIENT_SECRET_{profile_number}")
+    idx  = int(profile)
+    spotify_client_id = os.getenv(f"SPOTIFY_CLIENT_ID_{idx}")
+    spotify_client_secret = os.getenv(f"SPOTIFY_CLIENT_SECRET_{idx}")
 
     auth_string = f"{spotify_client_id}:{spotify_client_secret}"
     auth_bytes = auth_string.encode("utf-8")
