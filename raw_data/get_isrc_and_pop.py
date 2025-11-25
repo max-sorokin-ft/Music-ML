@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 # Popularity Adjustment Tables
 ADJUSTMENTS_DOWN = [
@@ -98,7 +98,7 @@ def process_isrc_spotify(songs, batch_size=50):
 
 
 def write_isrc_gcs(artists, bucket_name, base_blob_name):
-    client = storage.Client.from_service_account_json("gcp_creds.json")
+    client = storage.Client()
     bucket = client.bucket(bucket_name)
     try:
         for artist in tqdm(artists):

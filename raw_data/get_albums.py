@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 
 def fetch_albums_spotify(spotify_artist_id, token, max_retries=2, sleep_time=1):
@@ -88,7 +88,7 @@ def write_albums_gcs(artists, bucket_name, base_blob_name):
     """Writes the albums to the gcs bucket"""
     try:
         token = get_spotify_access_token()
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
         for artist in tqdm(artists):
             blob = bucket.blob(f"{artist['full_blob_name']}/albums.json")

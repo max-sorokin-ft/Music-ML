@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://kworb.net/spotify/artist/{spotify_artist_id}_songs.html"
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 def get_artist_songs_kworb(artist):
     """Gets the html of the page from kworb's page"""
@@ -217,7 +217,7 @@ def update_songs_from_grouped(songs, grouped_songs):
 def write_streams_to_gcs(artists, bucket_name, base_blob_name):
     """Main pipeline: matches streams, backfills missing tracks, writes songs.json and grouped_songs.json"""
     try:
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
         token = get_spotify_access_token()
 

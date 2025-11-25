@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.chosic.com/music-genre-finder/"
 SPOTIFY_URL = "https://open.spotify.com/artist/{artist_id}"
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 
 def create_browser():
@@ -90,7 +90,7 @@ def write_genres_to_gcs(artists, bucket_name, base_blob_name):
         browser.close()
         p.stop()
 
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(f"{base_blob_name}/artists.json")
 

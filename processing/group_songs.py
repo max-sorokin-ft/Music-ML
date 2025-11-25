@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 # Versions that are truly different recordings/performances
 DISTINCT_VERSIONS = {
@@ -209,7 +209,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
 
 def write_grouped_songs_to_gcs(artists, bucket_name, base_blob_name):
     try:
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
         
         for artist in tqdm(artists):

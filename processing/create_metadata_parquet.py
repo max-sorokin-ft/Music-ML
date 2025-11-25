@@ -22,11 +22,11 @@ from storage.gcs_utils import (
     get_artist_songs_from_gcs,
 )
 
-fs = gcsfs.GCSFileSystem(token="gcp_creds.json")
+fs = gcsfs.GCSFileSystem(token="google_default")
 pd.set_option("display.max_columns", None)
 pd.set_option("display.max_colwidth", None)
 
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 def create_artists_metadata_parquet(artists, bucket_name, base_blob_name):
     try:
@@ -36,7 +36,7 @@ def create_artists_metadata_parquet(artists, bucket_name, base_blob_name):
         df.to_parquet(buffer, index=False)
         buffer.seek(0)
 
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(f"{base_blob_name}/artists.parquet")
         blob.upload_from_file(buffer, content_type="application/parquet")

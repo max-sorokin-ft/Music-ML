@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 GCS_BATCH_SIZE = 250
 BASE_URL = "https://kworb.net/spotify/listeners{page_number}.html"
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 
 
 def fetch_artists_kworb(page_number):
@@ -157,7 +157,7 @@ def write_artists_gcs(
     artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE
 ):
     """Writes the artist list to a json file in a gcp bucket"""
-    client = storage.Client.from_service_account_json("gcp_creds.json")
+    client = storage.Client()
     bucket = client.bucket(bucket_name)
     batch_number = 1
     for i in tqdm(range(0, len(artists), batch_size)):

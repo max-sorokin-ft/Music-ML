@@ -18,7 +18,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BUCKET_NAME = "music-ml-data"
+BUCKET_NAME = "music--data"
 SKIT_WORDS = ["skit", "outro", "intro", "commentary", "interlude", "dialogue", "dialog", "monologue"]
 
 
@@ -161,7 +161,7 @@ def write_album_songs_gcs(artists, bucket_name, base_blob_name):
     """Writes the songs from an album for an aritst inside the album's folder"""
     try:
         token = get_spotify_access_token()
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
         for artist in tqdm(artists):
             albums = get_albums_from_gcs(artist, bucket_name)
@@ -203,7 +203,7 @@ def write_single_songs_gcs(artists, bucket_name, base_blob_name):
     """Writes the single songs to the album's folder"""
     try:
         token = get_spotify_access_token()
-        client = storage.Client.from_service_account_json("gcp_creds.json")
+        client = storage.Client()
         bucket = client.bucket(bucket_name)
 
         for artist in tqdm(artists):

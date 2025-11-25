@@ -220,8 +220,3 @@ previews/
 
 # audio files
 processing/audio
-processing/html.py
-processing/spotify.py
-processing/deezer.py
-processing/get_playlist.py
-processing/merge.py
