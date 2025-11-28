@@ -6,6 +6,8 @@ transformers==4.56.0
 # Numeric/Data Processing
 numpy==1.26.4
 pandas==2.3.2
+pyarrow==19.0.1
+psycopg2-binary==2.9.10
 
 # Web Scraping
 requests==2.32.5

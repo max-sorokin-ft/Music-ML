@@ -64,7 +64,6 @@ def process_kworb_html(page_number):
             individual_artist = {
                 "spotify_artist_id": None,
                 "artist": None,
-                "spotify_url": None,
                 "full_blob_name": None,
             }
             for i, td in enumerate(tr.find_all("td")):
@@ -130,20 +129,14 @@ def fetch_artists_spotify(batch_artist_list, token, max_retries=2, sleep_time=1)
 
 def process_artists_spotify(artists, batch_size=50):
     """Processes the spotify response for batches of artists"""
-    token = get_spotify_access_token()
+    token = get_spotify_access_token(args.num)
     try:
         for i in tqdm(range(0, len(artists), batch_size)):
             batch_artist_list = artists[i : i + batch_size]
             response = fetch_artists_spotify(batch_artist_list, token)
             for index, artist in enumerate(batch_artist_list):
-                artist["spotify_url"] = response["artists"][index]["external_urls"][
-                    "spotify"
-                ]
                 artist["followers"] = int(
                     response["artists"][index]["followers"]["total"]
-                )
-                artist["popularity"] = int(
-                    response["artists"][index]["popularity"]
                 )
                 artist["images"] = [image["url"] for image in response["artists"][index]["images"]]
             time.sleep(1)
@@ -190,6 +183,12 @@ if __name__ == "__main__":
         type=int,
         default=1,
         help="The page number of the kworb's page to scrape",
+    )
+    parser.add_argument(
+        "--num",
+        type=int,
+        default=1,
+        help="The number of artists to scrape",
     )
     args = parser.parse_args()
     try:
