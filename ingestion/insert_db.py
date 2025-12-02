@@ -100,12 +100,6 @@ def insert_albums():
         conn.close()
     except Exception as e:
         logger.error(f"Error inserting albums: {e}")
-        # Find the problematic row
-        for row in rows:
-            release_date = row[5]  # release_date is 6th element (0-indexed: 5)
-            album_id = row[0]
-            if len(str(release_date)) == 4:
-                print(f"Problematic album ID: {album_id}, Release Date: {release_date}")
         raise
 
 
