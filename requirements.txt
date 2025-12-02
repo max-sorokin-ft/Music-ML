@@ -17,6 +17,7 @@ playwright==1.48.0
 
 # Cloud Storage
 google-cloud-storage==2.10.0
+gcsfs==2025.10.0
 
 # Utilities
 tqdm==4.67.1

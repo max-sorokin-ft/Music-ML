@@ -59,3 +59,12 @@ def get_artist_grouped_songs_from_gcs(artist, bucket_name):
             f"Error getting all artist songs from gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/songs.json: {e}"
         )
         raise
+
+
+def normalize_release_date(release_date, release_date_precision):
+    """Normalize release date based on precision: year -> YYYY-01-01, month -> YYYY-MM-01."""
+    if release_date_precision == "year":
+        return f"{release_date}-01-01"
+    elif release_date_precision == "month":
+        return f"{release_date}-01"
+    return release_date

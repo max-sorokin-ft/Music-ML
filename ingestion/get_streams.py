@@ -7,13 +7,14 @@ from google.cloud import storage
 import argparse
 import time
 
-from storage.gcs_utils import (
+from ingestion.utils import (
     get_artists_from_gcs,
     get_artist_songs_from_gcs,
     get_artist_grouped_songs_from_gcs,
+    normalize_release_date,
 )
 from auth import get_spotify_access_token
-from processing.group_songs import group_songs
+from ingestion.group_songs import group_songs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://kworb.net/spotify/artist/{spotify_artist_id}_songs.html"
 BUCKET_NAME = "music--data"
+
 
 def get_artist_songs_kworb(artist):
     """Gets the html of the page from kworb's page"""
@@ -66,7 +68,7 @@ def process_artist_songs_kworb(artist):
 
 
 def match_streams_to_grouped_songs(grouped_songs, kworb_songs):
-    """Matches kworb streams to grouped songs and assigns streams to all variants in each group"""
+    """Matches kworb streams to grouped songs and assigns streams to all variants in each group, also assigns the canonical variant"""
     try:
         for song_data in grouped_songs.values():
             streams = []
@@ -122,7 +124,7 @@ def collect_missing_ids(grouped_songs, kworb_songs):
 
 
 def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
-    """Fetches tracks from Spotify API in batches of 50"""
+    """Fetches tracks from Spotify API in batches of 50, by batch"""
     try:
         all_tracks = []
         last_exception = None
@@ -138,7 +140,9 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
 
                     if response.status_code == 429:
                         retry_after = response.headers.get("Retry-After")
-                        logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                        logger.warning(
+                            f"Rate limited by Spotify. Come back in {retry_after} seconds."
+                        )
 
                     response.raise_for_status()
                     data = response.json()
@@ -159,12 +163,14 @@ def fetch_tracks_from_spotify(track_ids, token, max_retries=3, sleep_time=1):
 
         return all_tracks
     except Exception as e:
-        logger.error(f"Error fetching tracks from Spotify: {last_exception}. Failed after {max_retries} attempts.")
+        logger.error(
+            f"Error fetching tracks from Spotify: {last_exception}. Failed after {max_retries} attempts."
+        )
         raise last_exception
 
 
 def process_backfilled_tracks(tracks, artist):
-    """Processes backfilled tracks from Spotify API to songs.json format with streams"""
+    """Processes backfilled tracks from Spotify API."""
     try:
         processed_songs = []
 
@@ -172,20 +178,23 @@ def process_backfilled_tracks(tracks, artist):
             individual_song = {}
             individual_song["spotify_song_id"] = track["id"]
             individual_song["spotify_album_id"] = track["album"]["id"]
-            individual_song["spotify_artist_id"] = artist["spotify_artist_id"]
             individual_song["song"] = track["name"]
             individual_song["album"] = track["album"]["name"]
+            individual_song["origination_artist_id"] = artist["spotify_artist_id"]
             individual_song["artists"] = [
                 artist_data["name"] for artist_data in track["artists"]
             ]
-            individual_song["artist_ids"] = [
+            individual_song["spotify_artist_ids"] = [
                 artist_data["id"] for artist_data in track["artists"]
             ]
-            individual_song["spotify_url"] = track["external_urls"]["spotify"]
-            individual_song["release_date"] = track["album"]["release_date"]
+            individual_song["release_date_precision"] = track["album"]["release_date_precision"]
+            release_date = track["album"]["release_date"]
+            individual_song["release_date"] = normalize_release_date(release_date, track["album"]["release_date_precision"])
             individual_song["duration_ms"] = track["duration_ms"]
             individual_song["explicit"] = track["explicit"]
-            individual_song["images"] = [image["url"] for image in track["album"]["images"]]
+            individual_song["images"] = [
+                image["url"] for image in track["album"]["images"]
+            ]
             individual_song["spotify_popularity"] = track["popularity"]
             individual_song["isrc"] = track["external_ids"]["isrc"]
 
@@ -219,7 +228,7 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)
-        token = get_spotify_access_token()
+        token = get_spotify_access_token(args.num)
 
         for artist in tqdm(artists):
             try:
@@ -231,9 +240,7 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
 
                 if missing_ids:
                     fetched_tracks = fetch_tracks_from_spotify(missing_ids, token)
-                    backfilled_songs = process_backfilled_tracks(
-                        fetched_tracks, artist
-                    )
+                    backfilled_songs = process_backfilled_tracks(fetched_tracks, artist)
                     songs.extend(backfilled_songs)
 
                     logger.info(
@@ -242,9 +249,7 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
 
                     grouped_songs = group_songs(artist, bucket_name, songs)
                 else:
-                    logger.info(
-                        f"No missing IDs found for {artist['artist']}"
-                    )
+                    logger.info(f"No missing IDs found for {artist['artist']}")
 
                 grouped_songs = match_streams_to_grouped_songs(
                     grouped_songs, kworb_songs
@@ -282,12 +287,9 @@ def write_streams_to_gcs(artists, bucket_name, base_blob_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--page_number", type=int, default=1, help="The number of the kworb's page"
-    )
-    parser.add_argument(
-        "--batch_number", type=int, default=1, help="The batch number of the artists"
-    )
+    parser.add_argument("--page_number", type=int, default=1)
+    parser.add_argument("--batch_number", type=int, default=1)
+    parser.add_argument("--num", type=int, default=1)
     args = parser.parse_args()
 
     try:

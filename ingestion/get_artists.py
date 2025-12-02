@@ -75,7 +75,9 @@ def process_kworb_html(page_number):
                         individual_artist["spotify_artist_id"] = spotify_artist_id
                     if td.text.strip():
                         if artist_column_map[i] == "Listeners":
-                            individual_artist["monthly_listeners"] = int(td.text.strip().replace(",", ""))
+                            individual_artist["monthly_listeners"] = int(
+                                td.text.strip().replace(",", "")
+                            )
                         elif artist_column_map[i] == "Artist":
                             individual_artist["artist"] = td.text.strip()
                         individual_artist["full_blob_name"] = None
@@ -110,7 +112,9 @@ def fetch_artists_spotify(batch_artist_list, token, max_retries=2, sleep_time=1)
 
             if response.status_code == 429:
                 retry_after = response.headers.get("Retry-After")
-                logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                logger.warning(
+                    f"Rate limited by Spotify. Come back in {retry_after} seconds."
+                )
 
             response.raise_for_status()
             return response.json()
@@ -127,9 +131,8 @@ def fetch_artists_spotify(batch_artist_list, token, max_retries=2, sleep_time=1)
     raise last_exception
 
 
-def process_artists_spotify(artists, batch_size=50):
+def process_artists_spotify(artists, token, batch_size=50):
     """Processes the spotify response for batches of artists"""
-    token = get_spotify_access_token(args.num)
     try:
         for i in tqdm(range(0, len(artists), batch_size)):
             batch_artist_list = artists[i : i + batch_size]
@@ -138,7 +141,9 @@ def process_artists_spotify(artists, batch_size=50):
                 artist["followers"] = int(
                     response["artists"][index]["followers"]["total"]
                 )
-                artist["images"] = [image["url"] for image in response["artists"][index]["images"]]
+                artist["images"] = [
+                    image["url"] for image in response["artists"][index]["images"]
+                ]
             time.sleep(1)
         return artists
     except Exception as e:
@@ -146,9 +151,7 @@ def process_artists_spotify(artists, batch_size=50):
         raise
 
 
-def write_artists_gcs(
-    artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE
-):
+def write_artists_gcs(artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE):
     """Writes the artist list to a json file in a gcp bucket"""
     client = storage.Client()
     bucket = client.bucket(bucket_name)
@@ -178,22 +181,14 @@ def write_artists_gcs(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--page_number",
-        type=int,
-        default=1,
-        help="The page number of the kworb's page to scrape",
-    )
-    parser.add_argument(
-        "--num",
-        type=int,
-        default=1,
-        help="The number of artists to scrape",
-    )
+    parser.add_argument("--page_number", type=int, default=1)
+    parser.add_argument("--num", type=int, default=1)
     args = parser.parse_args()
+    
     try:
+        token = get_spotify_access_token(args.num)
         artists = process_kworb_html(args.page_number)
-        artists = process_artists_spotify(artists)
+        artists = process_artists_spotify(artists, token)
         write_artists_gcs(
             artists,
             BUCKET_NAME,

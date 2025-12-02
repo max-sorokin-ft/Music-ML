@@ -3,10 +3,13 @@ from pathlib import Path
 
 from db.db import get_connection
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+
 
 def apply_migrations():
     conn = get_connection()

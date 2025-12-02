@@ -7,7 +7,7 @@ import re
 import unicodedata
 import string
 
-from storage.gcs_utils import get_artists_from_gcs, get_artist_songs_from_gcs
+from ingestion.utils import get_artists_from_gcs, get_artist_songs_from_gcs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -127,6 +127,7 @@ def normalize_song_name(title: str) -> str:
 
 
 def group_songs(artist, bucket_name, songs=None, threshold=20000):
+    """Group a given artist's songs into variants by normalized name and duration proximity."""
     try: 
         grouped_songs = {}
         variant_counter = {}
@@ -144,7 +145,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                 grouped_songs[normalized_name]["variants"].append(
                     {
                         "artists": song["artists"],
-                        "artist_ids": song["artist_ids"],
+                        "artist_ids": song["spotify_artist_ids"],
                         "spotify_song_id": song["spotify_song_id"],
                         "song": song["song"],
                         "duration_ms": song["duration_ms"],
@@ -175,7 +176,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                     grouped_songs[matched_key]["variants"].append(
                         {
                             "artists": song["artists"],
-                            "artist_ids": song["artist_ids"],
+                            "artist_ids": song["spotify_artist_ids"],
                             "spotify_song_id": song["spotify_song_id"],
                             "song": song["song"],
                             "duration_ms": song["duration_ms"],
@@ -191,7 +192,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
                     grouped_songs[new_key]["variants"].append(
                         {
                             "artists": song["artists"],
-                            "artist_ids": song["artist_ids"],
+                            "artist_ids": song["spotify_artist_ids"],
                             "spotify_song_id": song["spotify_song_id"],
                             "song": song["song"],
                             "duration_ms": song["duration_ms"],
@@ -208,6 +209,7 @@ def group_songs(artist, bucket_name, songs=None, threshold=20000):
 
 
 def write_grouped_songs_to_gcs(artists, bucket_name, base_blob_name):
+    """Group songs for each artist and write grouped_songs.json to GCS."""
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)

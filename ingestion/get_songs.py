@@ -6,10 +6,11 @@ import time
 from tqdm import tqdm
 import argparse
 
-from storage.gcs_utils import (
+from ingestion.utils import (
     get_artists_from_gcs,
     get_albums_from_gcs,
     get_artist_songs_from_gcs,
+    normalize_release_date,
 )
 from auth import get_spotify_access_token
 
@@ -19,11 +20,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BUCKET_NAME = "music--data"
-SKIT_WORDS = ["skit", "outro", "intro", "commentary", "interlude", "dialogue", "dialog", "monologue"]
+SKIT_WORDS = [
+    "skit",
+    "outro",
+    "intro",
+    "commentary",
+    "interlude",
+    "dialogue",
+    "dialog",
+    "monologue",
+]
 
 
 def fetch_album_songs_spotify(album_id, token, max_retries=2, sleep_time=1):
-    """Gets the songs from the spotify api"""
+    """Gets the songs of an album from the spotify api"""
     last_exception = None
     for attempt in range(max_retries):
         try:
@@ -31,10 +41,12 @@ def fetch_album_songs_spotify(album_id, token, max_retries=2, sleep_time=1):
             headers = {"Authorization": f"Bearer {token}"}
             params = {"limit": 50}
             response = requests.get(url, headers=headers, params=params, timeout=10)
-            
+
             if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                retry_after = response.headers.get("Retry-After")
+                logger.warning(
+                    f"Rate limited by Spotify. Come back in {retry_after} seconds."
+                )
 
             response.raise_for_status()
             return response.json()
@@ -45,23 +57,27 @@ def fetch_album_songs_spotify(album_id, token, max_retries=2, sleep_time=1):
                 f"Error getting album songs from spotify: {e}. Retrying in {backoff_time} seconds."
             )
             time.sleep(backoff_time)
-    logger.error(f"Error getting album songs from spotify: {last_exception}. Failed after {max_retries} attempts.")
+    logger.error(
+        f"Error getting album songs from spotify: {last_exception}. Failed after {max_retries} attempts."
+    )
     raise last_exception
 
 
 def fetch_top_tracks_spotify(artist_id, token, max_retries=2, sleep_time=1):
-    """Gets the top tracks from the spotify api for a given artist"""
+    """Gets the top tracks of an artist from the spotify api"""
     last_exception = None
     for attempt in range(max_retries):
         try:
             url = f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks"
             headers = {"Authorization": f"Bearer {token}"}
             response = requests.get(url, headers=headers, timeout=10)
-            
+
             if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After")
-                    logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
-            
+                retry_after = response.headers.get("Retry-After")
+                logger.warning(
+                    f"Rate limited by Spotify. Come back in {retry_after} seconds."
+                )
+
             response.raise_for_status()
             return response.json()
         except Exception as e:
@@ -71,7 +87,9 @@ def fetch_top_tracks_spotify(artist_id, token, max_retries=2, sleep_time=1):
                 f"Error getting artist top tracks from spotify: {e}. Retrying in {backoff_time} seconds."
             )
             time.sleep(backoff_time)
-    logger.error(f"Error getting artist top tracks from spotify: {last_exception}. Failed after {max_retries} attempts.")
+    logger.error(
+        f"Error getting artist top tracks from spotify: {last_exception}. Failed after {max_retries} attempts."
+    )
     raise last_exception
 
 
@@ -81,8 +99,6 @@ def process_album_songs_spotify(album, token, duration_threshold=50000):
         songs_list = []
         songs = fetch_album_songs_spotify(album["spotify_album_id"], token)
         for song in songs["items"]:
-            if song["artists"][0]["name"] != album["artist"]:
-                continue
             normalized_song_name = (song["name"]).lower()
             if any(word in normalized_song_name for word in SKIT_WORDS):
                 if song["duration_ms"] < duration_threshold:
@@ -90,13 +106,16 @@ def process_album_songs_spotify(album, token, duration_threshold=50000):
             individual_song = {}
             individual_song["spotify_song_id"] = song["id"]
             individual_song["spotify_album_id"] = album["spotify_album_id"]
-            individual_song["spotify_artist_id"] = album["spotify_artist_id"]
             individual_song["song"] = song["name"]
             individual_song["album"] = album["album"]
+            individual_song["origination_artist_id"] = album["origination_artist_id"]
             individual_song["artists"] = [artist["name"] for artist in song["artists"]]
-            individual_song["artist_ids"] = [artist["id"] for artist in song["artists"]]
-            individual_song["spotify_url"] = song["external_urls"]["spotify"]
-            individual_song["release_date"] = album["release_date"]
+            individual_song["spotify_artist_ids"] = [
+                artist["id"] for artist in song["artists"]
+            ]
+            individual_song["release_date_precision"] = album["release_date_precision"]
+            release_date = album["release_date"]
+            individual_song["release_date"] = normalize_release_date(release_date, album["release_date_precision"])
             individual_song["duration_ms"] = song["duration_ms"]
             individual_song["explicit"] = song["explicit"]
             individual_song["images"] = album["images"]
@@ -111,24 +130,26 @@ def process_top_tracks_spotify(artist, token, top_n_tracks=15):
     """Processes the top tracks from the spotify api for a given artist, only includes singles"""
     try:
         top_songs = []
-        top_tracks = fetch_top_tracks_spotify(
-            artist["spotify_artist_id"], token
-        )
+        top_tracks = fetch_top_tracks_spotify(artist["spotify_artist_id"], token)
         for track in top_tracks["tracks"][:top_n_tracks]:
-            if track["artists"][0]["name"] != artist["artist"]:
-                continue
             individual_song = {}
             individual_song["spotify_song_id"] = track["id"]
             individual_song["spotify_album_id"] = track["album"]["id"]
             individual_song["song"] = track["name"]
             individual_song["album"] = track["album"]["name"]
+            individual_song["origination_artist_id"] = artist["spotify_artist_id"]
             individual_song["artists"] = [artist["name"] for artist in track["artists"]]
-            individual_song["artist_ids"] = [artist["id"] for artist in track["artists"]]
-            individual_song["spotify_url"] = track["external_urls"]["spotify"]
-            individual_song["release_date"] = track["album"]["release_date"]
+            individual_song["spotify_artist_ids"] = [
+                artist["id"] for artist in track["artists"]
+            ]
+            individual_song["release_date_precision"] = track["album"]["release_date_precision"]
+            release_date = track["album"]["release_date"]
+            individual_song["release_date"] = normalize_release_date(release_date, track["album"]["release_date_precision"])
             individual_song["duration_ms"] = track["duration_ms"]
             individual_song["explicit"] = track["explicit"]
-            individual_song["images"] = [image["url"] for image in track["album"]["images"]]
+            individual_song["images"] = [
+                image["url"] for image in track["album"]["images"]
+            ]
             top_songs.append(individual_song)
         return top_songs
     except Exception as e:
@@ -136,7 +157,7 @@ def process_top_tracks_spotify(artist, token, top_n_tracks=15):
         raise
 
 
-def dedupe_single_songs(artist, token, bucket_name):
+def dedupe_single_songs(artist, bucket_name, token):
     """Dedupe the songs. This removes songs that are already in the albums, and leaves singles
     in the top 15 songs of the artist."""
     try:
@@ -157,17 +178,16 @@ def dedupe_single_songs(artist, token, bucket_name):
         raise
 
 
-def write_album_songs_gcs(artists, bucket_name, base_blob_name):
+def write_album_songs_gcs(artists, bucket_name, base_blob_name, token):
     """Writes the songs from an album for an aritst inside the album's folder"""
     try:
-        token = get_spotify_access_token()
         client = storage.Client()
         bucket = client.bucket(bucket_name)
         for artist in tqdm(artists):
             albums = get_albums_from_gcs(artist, bucket_name)
             all_album_songs = []
             for album in albums:
-                if album["type"] == "album":
+                if album["album_type"] == "album":
                     blob = bucket.blob(
                         f"{artist['full_blob_name']}/{album['spotify_album_id']}/songs.json"
                     )
@@ -199,15 +219,14 @@ def write_album_songs_gcs(artists, bucket_name, base_blob_name):
         raise
 
 
-def write_single_songs_gcs(artists, bucket_name, base_blob_name):
+def write_single_songs_gcs(artists, bucket_name, base_blob_name, token):
     """Writes the single songs to the album's folder"""
     try:
-        token = get_spotify_access_token()
         client = storage.Client()
         bucket = client.bucket(bucket_name)
 
         for artist in tqdm(artists):
-            single_songs = dedupe_single_songs(artist, token, bucket_name)
+            single_songs = dedupe_single_songs(artist, bucket_name, token)
             for song in single_songs:
                 blob = bucket.blob(
                     f"{artist['full_blob_name']}/{song['spotify_album_id']}/songs.json"
@@ -242,20 +261,13 @@ def write_single_songs_gcs(artists, bucket_name, base_blob_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--page_number",
-        type=int,
-        default=1,
-        help="The number of the kworb's page",
-    )
-    parser.add_argument(
-        "--batch_number",
-        type=int,
-        default=1,
-        help="The batch number of the artists",
-    )
+    parser.add_argument("--page_number", type=int, default=1)
+    parser.add_argument("--batch_number", type=int, default=1)
+    parser.add_argument("--num", type=int, default=2)
     args = parser.parse_args()
+    
     try:
+        token = get_spotify_access_token(args.num)
         artists = get_artists_from_gcs(
             BUCKET_NAME,
             f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
@@ -265,11 +277,13 @@ if __name__ == "__main__":
             artists,
             BUCKET_NAME,
             f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+            token,
         )
         write_single_songs_gcs(
             artists,
             BUCKET_NAME,
             f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+            token,
         )
     except Exception as e:
         logger.error(f"Error running the script get_songs.py: {e}")

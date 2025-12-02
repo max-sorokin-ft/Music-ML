@@ -7,7 +7,7 @@ from tqdm import tqdm
 import argparse
 
 from auth import get_spotify_access_token
-from storage.gcs_utils import get_artists_from_gcs
+from ingestion.utils import get_artists_from_gcs, normalize_release_date
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
@@ -36,7 +36,9 @@ def fetch_albums_spotify(spotify_artist_id, token, max_retries=2, sleep_time=1):
                 )
                 if response.status_code == 429:
                     retry_after = response.headers.get("Retry-After")
-                    logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                    logger.warning(
+                        f"Rate limited by Spotify. Come back in {retry_after} seconds."
+                    )
 
                 response.raise_for_status()
                 data = response.json()
@@ -50,7 +52,9 @@ def fetch_albums_spotify(spotify_artist_id, token, max_retries=2, sleep_time=1):
                 )
                 time.sleep(backoff_time)
         if not success:
-            logger.error(f"Error getting albums from Spotify for artist {spotify_artist_id}: {last_exception}. Failed after {max_retries} attempts.")    
+            logger.error(
+                f"Error getting albums from Spotify for artist {spotify_artist_id}: {last_exception}. Failed after {max_retries} attempts."
+            )
             raise last_exception
 
         all_album_items.extend(data.get("items", []))
@@ -70,11 +74,17 @@ def process_albums_spotify(artist, token):
             individual_album = {}
             individual_album["spotify_album_id"] = album["id"]
             individual_album["album"] = album["name"]
-            individual_album["artists"] = [artist["name"] for artist in album["artists"]]
-            individual_album["artist_ids"] = [artist["id"] for artist in album["artists"]]
-            individual_album["spotify_url"] = album["external_urls"]["spotify"]
-            individual_album["type"] = album["album_type"]
-            individual_album["release_date"] = album["release_date"]
+            individual_album["origination_artist_id"] = artist["spotify_artist_id"]
+            individual_album["artists"] = [
+                artist["name"] for artist in album["artists"]
+            ]
+            individual_album["spotify_artist_ids"] = [
+                artist["id"] for artist in album["artists"]
+            ]
+            individual_album["album_type"] = album["album_type"]
+            individual_album["release_date_precision"] = album["release_date_precision"]
+            release_date = album["release_date"]
+            individual_album["release_date"] = normalize_release_date(release_date, album["release_date_precision"])
             individual_album["total_tracks"] = album["total_tracks"]
             individual_album["images"] = [image["url"] for image in album["images"]]
             album_list.append(individual_album)
@@ -87,9 +97,9 @@ def process_albums_spotify(artist, token):
 def write_albums_gcs(artists, bucket_name, base_blob_name):
     """Writes the albums to the gcs bucket"""
     try:
-        token = get_spotify_access_token()
         client = storage.Client()
         bucket = client.bucket(bucket_name)
+        token = get_spotify_access_token(args.num)
         for artist in tqdm(artists):
             blob = bucket.blob(f"{artist['full_blob_name']}/albums.json")
             albums = process_albums_spotify(artist, token)
@@ -113,19 +123,11 @@ def write_albums_gcs(artists, bucket_name, base_blob_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--page_number",
-        type=int,
-        default=1,
-        help="The number of the kworb's page",
-    )
-    parser.add_argument(
-        "--batch_number",
-        type=int,
-        default=1,
-        help="The batch number of the artists",
-    )
+    parser.add_argument("--page_number", type=int, default=1)
+    parser.add_argument( "--batch_number", type=int, default=1)
+    parser.add_argument("--num", type=int, default=1)
     args = parser.parse_args()
+    
     try:
         artists = get_artists_from_gcs(
             BUCKET_NAME,

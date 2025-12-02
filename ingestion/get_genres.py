@@ -4,11 +4,13 @@ import logging
 from playwright.sync_api import sync_playwright
 from tqdm import tqdm
 from argparse import ArgumentParser
-from storage.gcs_utils import get_artists_from_gcs
+from ingestion.utils import get_artists_from_gcs
 from google.cloud import storage
 import json
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.chosic.com/music-genre-finder/"
@@ -31,6 +33,7 @@ def create_browser():
 
 
 def get_artist_genres(browser, artist_id):
+    """Return a list of genres for the given Spotify artist id."""
     try:
         artist_url = SPOTIFY_URL.format(artist_id=artist_id)
 
@@ -47,10 +50,12 @@ def get_artist_genres(browser, artist_id):
         page.mouse.move(
             random.randint(400, 1400),
             random.randint(300, 700),
-            steps=random.randint(12, 20)
+            steps=random.randint(12, 20),
         )
 
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight * Math.random() * 0.5)")
+        page.evaluate(
+            "window.scrollTo(0, document.body.scrollHeight * Math.random() * 0.5)"
+        )
         time.sleep(random.uniform(2.0, 4.0))
 
         page.select_option("#suggestion-options", value="artistUrl")
@@ -72,6 +77,7 @@ def get_artist_genres(browser, artist_id):
 
 
 def write_genres_to_gcs(artists, bucket_name, base_blob_name):
+    """Fetch genres for each artist and write updated artists to GCS."""
     try:
         updated_artists = []
 
@@ -99,7 +105,9 @@ def write_genres_to_gcs(artists, bucket_name, base_blob_name):
             content_type="application/json",
         )
 
-        logger.info(f"Wrote {len(updated_artists)} artists to gs://{bucket_name}/{base_blob_name}/artists.json")
+        logger.info(
+            f"Wrote {len(updated_artists)} artists to gs://{bucket_name}/{base_blob_name}/artists.json"
+        )
 
     except Exception as e:
         logger.error(f"Error writing genres to GCS: {e}")

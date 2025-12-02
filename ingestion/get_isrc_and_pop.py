@@ -6,7 +6,7 @@ import time
 from tqdm import tqdm
 import argparse
 
-from storage.gcs_utils import (
+from ingestion.utils import (
     get_artists_from_gcs,
     get_artist_songs_from_gcs,
 )
@@ -38,7 +38,9 @@ ADJUSTMENTS_UP = [
     ((71, 100), +7),
 ]
 
+
 def adjust_spotify_popularity_value(popularity):
+    """Helper function to adjust the popularity value of a song"""
     for (low, high), adj in ADJUSTMENTS_DOWN:
         if low <= popularity <= high:
             return popularity + adj
@@ -50,7 +52,8 @@ def adjust_spotify_popularity_value(popularity):
     return popularity
 
 
-def fetch_isrc_spotify(songs, token, max_retries=3, sleep_time=1):
+def fetch_songs_spotify(songs, token, max_retries=3, sleep_time=1):
+    """Fetches songs from the spotify api"""
     last_exception = None
     for attempt in range(max_retries):
         try:
@@ -62,48 +65,60 @@ def fetch_isrc_spotify(songs, token, max_retries=3, sleep_time=1):
 
             if response.status_code == 429:
                 retry_after = response.headers.get("Retry-After")
-                logger.warning(f"Rate limited by Spotify. Come back in {retry_after} seconds.")
+                logger.warning(
+                    f"Rate limited by Spotify. Come back in {retry_after} seconds."
+                )
 
             response.raise_for_status()
             return response.json()
         except Exception as e:
             last_exception = e
-            backoff_time = sleep_time * (2 ** attempt)
-            logger.warning(f"Error fetching ISRC from Spotify API: {e}. Retrying in {backoff_time} seconds.")
+            backoff_time = sleep_time * (2**attempt)
+            logger.warning(
+                f"Error fetching ISRC from Spotify API: {e}. Retrying in {backoff_time} seconds."
+            )
             time.sleep(backoff_time)
 
-    logger.error(f"Error fetching ISRC from Spotify API: {last_exception}. Failed after {max_retries} attempts.")
+    logger.error(
+        f"Error fetching ISRC from Spotify API: {last_exception}. Failed after {max_retries} attempts."
+    )
     raise last_exception
 
 
-def process_isrc_spotify(songs, batch_size=50):
-    token = get_spotify_access_token()
+def process_songs_spotify(songs, token, batch_size=50):
+    """Processes the songs, specifically the ISRC and popularity, by batch"""
     try:
+        valid_songs = []
         for i in range(0, len(songs), batch_size):
-            batch_songs = songs[i:i + batch_size]
-            response = fetch_isrc_spotify(batch_songs, token)
+            batch_songs = songs[i : i + batch_size]
+            response = fetch_songs_spotify(batch_songs, token)
 
             for index, song in enumerate(batch_songs):
-                song["isrc"] = response["tracks"][index]["external_ids"]["isrc"]
+                track = response["tracks"][index]
+                if not track.get("external_ids"):
+                    continue
 
-                raw_popularity = response["tracks"][index]["popularity"]
+                song["isrc"] = track["external_ids"]["isrc"]
+                raw_popularity = track["popularity"]
                 adjusted_popularity = adjust_spotify_popularity_value(raw_popularity)
                 song["spotify_popularity"] = adjusted_popularity
+                valid_songs.append(song)
 
             time.sleep(0.8)
-        return songs
+        return valid_songs
     except Exception as e:
         logger.error(f"Error processing ISRC from Spotify API: {e}")
         raise
 
 
-def write_isrc_gcs(artists, bucket_name, base_blob_name):
+def write_isrc_pop_gcs(artists, bucket_name, base_blob_name, token):
+    """Writes/adds the ISRC and popularity of the songs to the gcs bucket"""
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     try:
         for artist in tqdm(artists):
             songs = get_artist_songs_from_gcs(artist, bucket_name)
-            songs = process_isrc_spotify(songs)
+            songs = process_songs_spotify(songs, token)
             blob = bucket.blob(f"{artist['full_blob_name']}/songs.json")
             blob.upload_from_string(
                 json.dumps(songs, indent=3, ensure_ascii=False),
@@ -117,7 +132,9 @@ def write_isrc_gcs(artists, bucket_name, base_blob_name):
             f"Successfully wrote ISRC for {len(artists)} artists songs to gcs bucket {bucket_name} with blob name {base_blob_name}"
         )
     except Exception as e:
-        logger.error(f"Error writing ISRC to GCS bucket {bucket_name} with blob name {base_blob_name}: {e}")
+        logger.error(
+            f"Error writing ISRC to GCS bucket {bucket_name} with blob name {base_blob_name}: {e}"
+        )
         raise
 
 
@@ -125,18 +142,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--page_number", type=int, default=1)
     parser.add_argument("--batch_number", type=int, default=1)
+    parser.add_argument("--num", type=int, default=3)
     args = parser.parse_args()
 
+    try:
+        token = get_spotify_access_token(args.num)
     artists = get_artists_from_gcs(
         BUCKET_NAME,
         f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
     )
-
-    try:
-        write_isrc_gcs(
+        write_isrc_pop_gcs(
             artists,
             BUCKET_NAME,
-            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}"
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
+            token,
         )
     except Exception as e:
         logger.error(f"Error running the script get_isrc.py: {e}")
