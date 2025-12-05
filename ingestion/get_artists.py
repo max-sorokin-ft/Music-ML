@@ -86,7 +86,7 @@ def process_kworb_html(page_number):
         logger.info(
             f"Successfully processed artists from kworb's html page {page_number}"
         )
-        return artists
+        return artists[(args.batch_number - 1) * GCS_BATCH_SIZE : args.batch_number * GCS_BATCH_SIZE]
     except Exception as e:
         logger.error(
             f"Error processing artists from kworb's html page {page_number}: {e}"
@@ -151,37 +151,34 @@ def process_artists_spotify(artists, token, batch_size=50):
         raise
 
 
-def write_artists_gcs(artists, bucket_name, base_blob_name, batch_size=GCS_BATCH_SIZE):
+def write_artists_gcs(artists, bucket_name, blob_name):
     """Writes the artist list to a json file in a gcp bucket"""
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    batch_number = 1
-    for i in tqdm(range(0, len(artists), batch_size)):
-        try:
-            artist_batch = artists[i : i + batch_size]
-            for artist in artist_batch:
-                artist["full_blob_name"] = (
-                    f"{base_blob_name}/batch{batch_number}/{artist['spotify_artist_id']}"
-                )
-            blob = bucket.blob(f"{base_blob_name}/batch{batch_number}/artists.json")
-            blob.upload_from_string(
-                json.dumps(artist_batch, indent=3, ensure_ascii=False),
-                content_type="application/json",
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        for artist in artists:
+            artist["full_blob_name"] = (
+                f"{blob_name}/{artist['spotify_artist_id']}"
             )
-            logger.info(
-                f"Successfully wrote artists to gcs bucket {bucket_name} with blob name {base_blob_name}/batch{batch_number}/artists.json"
-            )
-            batch_number += 1
-        except Exception as e:
-            logger.error(
-                f"Error writing artists to gcs bucket {bucket_name} with blob name {base_blob_name}/batch{batch_number}/artists.json: {e}"
-            )
-            raise
+        blob = bucket.blob(f"{blob_name}/artists.json")
+        blob.upload_from_string(
+            json.dumps(artists, indent=3, ensure_ascii=False),
+            content_type="application/json",
+        )
+        logger.info(
+            f"Successfully wrote artists to gcs bucket {bucket_name} with blob name {blob_name}/artists.json"
+        )
+    except Exception as e:
+        logger.error(
+            f"Error writing artists to gcs bucket {bucket_name} with blob name {blob_name}/artists.json: {e}"
+        )
+        raise
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--page_number", type=int, default=1)
+    parser.add_argument("--batch_number", type=int, default=1)
     parser.add_argument("--num", type=int, default=1)
     args = parser.parse_args()
     
@@ -192,7 +189,7 @@ if __name__ == "__main__":
         write_artists_gcs(
             artists,
             BUCKET_NAME,
-            f"raw-json-data/artists_kworbpage{args.page_number}",
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}",
         )
     except Exception as e:
         logger.error(f"Error running the script get_artists.py: {e}")
