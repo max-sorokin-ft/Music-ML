@@ -5,7 +5,22 @@ from prefect import flow, task
 @task
 def run_script(script_path, flags):
     command = [sys.executable, "-m", script_path] + flags
-    subprocess.run(command, check=True)
+
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1
+    )
+
+    for line in iter(process.stdout.readline, ""):
+        print(line, end="")
+
+    process.wait()
+
+    if process.returncode != 0:
+        raise Exception(f"Script {script_path} failed with code {process.returncode}")
 
 @flow(name="ingestion_flow", log_prints=True)
 def ingestion_flow(page_number: int, batch_number: int):
