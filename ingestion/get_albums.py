@@ -93,6 +93,15 @@ def process_albums_spotify(artist, token):
         logger.error(f"Error processing albums from spotify: {e}")
         raise
 
+def dedupe_albums(albums):
+    """Deduplicates the albums based on DB existance; primarily for inter group deduplication"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""SELECT spotify_album_id FROM albums""")
+        albums_ids = cursor.fetchall()
+        albums_ids = [album_id[0] for album_id in albums_ids]
+        deduped_albums = [album for album in albums if album["spotify_album_id"] not in albums_ids]
 
 def write_albums_gcs(artists, bucket_name, base_blob_name):
     """Writes the albums to the gcs bucket"""
@@ -103,14 +112,18 @@ def write_albums_gcs(artists, bucket_name, base_blob_name):
         for artist in tqdm(artists):
             blob = bucket.blob(f"{artist['full_blob_name']}/albums.json")
             albums = process_albums_spotify(artist, token)
-            blob.upload_from_string(
-                json.dumps(albums, indent=3, ensure_ascii=False),
-                content_type="application/json",
-            )
-            time.sleep(0.5)
-            logger.info(
-                f"Successfully wrote {len(albums)} albums for {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/albums.json"
-            )
+            albums = dedupe_albums(albums)
+            if albums:
+                blob.upload_from_string(
+                    json.dumps(albums, indent=3, ensure_ascii=False),
+                    content_type="application/json",
+                )
+                time.sleep(0.5)
+                logger.info(
+                    f"Successfully wrote {len(albums)} albums for {artist['artist']} to gcs bucket {bucket_name} with blob name {artist['full_blob_name']}/albums.json"
+                )
+            else:
+                logger.info(f"All albums for {artist['origination_artist_id']} already exist in the database.")
         logger.info(
             f"Successfully wrote albums for {len(artists)} artists to gcs bucket {bucket_name} with base blob name {base_blob_name}"
         )

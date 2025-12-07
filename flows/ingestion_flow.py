@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from prefect import flow, task
+from prefect import flow, task, logger
 
 @task
 def run_script(script_path, flags):
@@ -35,6 +35,8 @@ def ingestion_flow(page_number: int, batch_number: int):
     run_script("ingestion.get_streams", ["--page_number", p, "--batch_number", b, "--num", "1"])
     run_script("ingestion.create_parquet", ["--page_number", p, "--batch_number", b])
     run_script("ingestion.insert_db", ["--page_number", p, "--batch_number", b])
+
+    logger.info(f"INGESTION FLOW COMPLETED for page {p} and batch {b}")
 
 if __name__ == "__main__":
     ingestion_flow(page_number=1, batch_number=1)

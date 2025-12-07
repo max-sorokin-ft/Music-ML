@@ -7,6 +7,8 @@ import time
 import logging
 from google.cloud import storage
 import argparse
+import psycopg2
+from db.db import get_connection
 
 from auth import get_spotify_access_token
 
@@ -150,24 +152,45 @@ def process_artists_spotify(artists, token, batch_size=50):
         logger.error(f"Error processing spotify response: {e}")
         raise
 
+def dedupe_artists(artists):
+    """Deduplicates the artists based on DB existance; primarily for inter group deduplication"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""SELECT spotify_artist_id FROM artists""")
+        artists_ids = cursor.fetchall()
+        artists_ids = [artist_id[0] for artist_id in artists_ids]
+        deduped_artists = [artist for artist in artists if artist["spotify_artist_id"] not in artists_ids]
+
+        cursor.close()
+        conn.close()
+        return deduped_artists
+    except Exception as e:
+        logger.error(f"Error deduplicating artists: {e}")
+        raise
+
 
 def write_artists_gcs(artists, bucket_name, blob_name):
     """Writes the artist list to a json file in a gcp bucket"""
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)
-        for artist in artists:
-            artist["full_blob_name"] = (
-                f"{blob_name}/{artist['spotify_artist_id']}"
+        artists = dedupe_artists(artists)
+        if artists:
+            for artist in artists:
+                artist["full_blob_name"] = (
+                    f"{blob_name}/{artist['spotify_artist_id']}"
+                )
+            blob = bucket.blob(f"{blob_name}/artists.json")
+            blob.upload_from_string(
+                json.dumps(artists, indent=3, ensure_ascii=False),
+                content_type="application/json",
             )
-        blob = bucket.blob(f"{blob_name}/artists.json")
-        blob.upload_from_string(
-            json.dumps(artists, indent=3, ensure_ascii=False),
-            content_type="application/json",
-        )
-        logger.info(
-            f"Successfully wrote artists to gcs bucket {bucket_name} with blob name {blob_name}/artists.json"
-        )
+            logger.info(
+                f"Successfully wrote artists to gcs bucket {bucket_name} with blob name {blob_name}/artists.json"
+            )
+        else:
+            logger.info(f"All artists for batch {args.batch_number} already exist in the database.")
     except Exception as e:
         logger.error(
             f"Error writing artists to gcs bucket {bucket_name} with blob name {blob_name}/artists.json: {e}"
