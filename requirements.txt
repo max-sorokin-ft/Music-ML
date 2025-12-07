@@ -22,3 +22,6 @@ gcsfs==2025.10.0
 # Utilities
 tqdm==4.67.1
 python-dotenv==1.0.1
+
+# Orchestration
+prefect==3.6.5

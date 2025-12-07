@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from prefect import flow, task, logger
+from prefect import flow, task
 
 @task
 def run_script(script_path, flags):
