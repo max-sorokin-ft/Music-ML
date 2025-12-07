@@ -102,6 +102,10 @@ def dedupe_albums(albums):
         albums_ids = cursor.fetchall()
         albums_ids = [album_id[0] for album_id in albums_ids]
         deduped_albums = [album for album in albums if album["spotify_album_id"] not in albums_ids]
+        return deduped_albums
+    except Exception as e:
+        logger.error(f"Error deduplicating albums: {e}")
+        raise
 
 def write_albums_gcs(artists, bucket_name, base_blob_name):
     """Writes the albums to the gcs bucket"""
