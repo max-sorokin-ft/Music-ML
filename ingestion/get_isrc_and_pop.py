@@ -147,10 +147,10 @@ if __name__ == "__main__":
 
     try:
         token = get_spotify_access_token(args.num)
-    artists = get_artists_from_gcs(
-        BUCKET_NAME,
-        f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
-    )
+        artists = get_artists_from_gcs(
+            BUCKET_NAME,
+            f"raw-json-data/artists_kworbpage{args.page_number}/batch{args.batch_number}/artists.json",
+        )
         write_isrc_pop_gcs(
             artists,
             BUCKET_NAME,

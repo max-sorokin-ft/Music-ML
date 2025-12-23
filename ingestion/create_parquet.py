@@ -61,7 +61,7 @@ def create_albums_metadata_parquet(artists, bucket_name, base_blob_name):
     """Create and upload albums.parquet from artists' album JSON."""
     try:
         albums = []
-        for artist in tqdm(artists):
+        for artist in tqdm(artists, ncols=100, leave=True):
             artist_albums = get_albums_from_gcs(artist, bucket_name)
             albums.extend(artist_albums)
 
@@ -92,7 +92,7 @@ def create_songs_metadata_parquet(artists, bucket_name, base_blob_name):
     """Create and upload songs.parquet with adjusted popularity columns."""
     try:
         songs = []
-        for artist in tqdm(artists):
+        for artist in tqdm(artists, ncols=100, leave=True):
             artist_songs = get_artist_songs_from_gcs(artist, bucket_name)
             songs.extend(artist_songs)
 

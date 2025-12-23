@@ -28,6 +28,7 @@ def ingestion_flow(page_number: int, batch_number: int):
     b = str(batch_number)
 
     run_script("ingestion.get_artists", ["--page_number", p, "--batch_number", b, "--num", "1"])
+    run_script("ingestion.get_genres", ["--page_number", p, "--batch_number", b, "--num", "1"])
     run_script("ingestion.get_albums", ["--page_number", p, "--batch_number", b, "--num", "1"])
     run_script("ingestion.get_songs", ["--page_number", p, "--batch_number", b, "--num", "2"])
     run_script("ingestion.get_isrc_and_pop", ["--page_number", p, "--batch_number", b, "--num", "3"])

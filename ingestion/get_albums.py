@@ -5,6 +5,8 @@ import logging
 import time
 from tqdm import tqdm
 import argparse
+import psycopg2
+from db.db import get_connection
 
 from auth import get_spotify_access_token
 from ingestion.utils import get_artists_from_gcs, normalize_release_date
